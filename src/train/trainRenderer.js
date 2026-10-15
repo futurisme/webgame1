@@ -1289,11 +1289,11 @@ export class TrainRenderer {
 
           // Dispatch to Tier-Specific Station Architectures
           if (st.type === 'large') {
-            this.drawGrandTerminalStation(st, p1, p2, platWidth, platHeight, trackY, dt);
+            this.drawGrandTerminalStation(st, p1, p2, platWidth, platHeight, trackY, dt, platStartM, platEndM);
           } else if (st.type === 'medium') {
-            this.drawCityMediumStation(st, p1, p2, platWidth, platHeight, trackY, dt);
+            this.drawCityMediumStation(st, p1, p2, platWidth, platHeight, trackY, dt, platStartM, platEndM);
           } else {
-            this.drawRuralSmallStation(st, p1, p2, platWidth, platHeight, trackY, dt);
+            this.drawRuralSmallStation(st, p1, p2, platWidth, platHeight, trackY, dt, platStartM, platEndM);
           }
         }
       });
@@ -1325,7 +1325,9 @@ export class TrainRenderer {
    * Monumental barrel-vault glass spaceframe, suspended skybridge concourse,
    * animated electronic arrival warnings, LED matrix boards, kiosks & bustling crowds!
    */
-  drawGrandTerminalStation(st, p1, p2, platWidth, platHeight, trackY, dt) {
+  drawGrandTerminalStation(st, p1, p2, platWidth, platHeight, trackY, dt, platStartM, platEndM) {
+    if (platStartM === undefined) platStartM = st.posM - st.platformLenM / 2;
+    if (platEndM === undefined) platEndM = st.posM + st.platformLenM / 2;
     const platY = trackY - platHeight;
     const isTrainArriving = Math.abs(this.sim.distanceM - st.posM) < 320;
     const isTrainStopped = isTrainArriving && Math.abs(this.sim.velocityMs) < 0.2;
@@ -1476,7 +1478,9 @@ export class TrainRenderer {
    * Cantilever structural steel canopy, digital arrival display, vending machines,
    * platform waiting shelter and commuter crowd!
    */
-  drawCityMediumStation(st, p1, p2, platWidth, platHeight, trackY, dt) {
+  drawCityMediumStation(st, p1, p2, platWidth, platHeight, trackY, dt, platStartM, platEndM) {
+    if (platStartM === undefined) platStartM = st.posM - st.platformLenM / 2;
+    if (platEndM === undefined) platEndM = st.posM + st.platformLenM / 2;
     const platY = trackY - platHeight;
     const isTrainArriving = Math.abs(this.sim.distanceM - st.posM) < 260;
     const centerScr = this.worldToScreen(st.posM);
@@ -1561,7 +1565,9 @@ export class TrainRenderer {
    * Quaint Japanese wooden shelter, warm glowing paper lanterns, retro wooden sign,
    * IC card touch pole, safety mirror, and cherry blossom tree!
    */
-  drawRuralSmallStation(st, p1, p2, platWidth, platHeight, trackY, dt) {
+  drawRuralSmallStation(st, p1, p2, platWidth, platHeight, trackY, dt, platStartM, platEndM) {
+    if (platStartM === undefined) platStartM = st.posM - st.platformLenM / 2;
+    if (platEndM === undefined) platEndM = st.posM + st.platformLenM / 2;
     const platY = trackY - platHeight;
     const centerScr = this.worldToScreen(st.posM);
 

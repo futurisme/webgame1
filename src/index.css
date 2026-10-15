@@ -1,0 +1,330 @@
+@import "tailwindcss";
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background-color: #FF2A85;
+    color: #111111;
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    overscroll-behavior: none;
+    touch-action: pan-x;
+  }
+}
+
+/* Otasukebu-inspired Anime Pop Palette & Game Center Styles */
+:root {
+  --ota-pink: #FF2A85;
+  --ota-yellow: #FFE500;
+  --ota-white: #FFFFFF;
+  --ota-black: #111111;
+}
+
+.font-pixel {
+  font-family: 'Press Start 2P', monospace;
+}
+
+.font-jp-retro {
+  font-family: 'DotGothic16', sans-serif;
+}
+
+.font-bungee {
+  font-family: 'Bungee', cursive, sans-serif;
+}
+
+/* Anime Pop Neo-brutalist Containers */
+.neo-box {
+  border: 3.5px solid #111111;
+  box-shadow: 4px 4px 0px 0px #111111;
+}
+
+.neo-box-sm {
+  border: 2.5px solid #111111;
+  box-shadow: 3px 3px 0px 0px #111111;
+}
+
+.neo-box-lg {
+  border: 4px solid #111111;
+  box-shadow: 6px 6px 0px 0px #111111;
+}
+
+.neo-btn {
+  border: 2.5px solid #111111;
+  box-shadow: 3px 3px 0px 0px #111111;
+  transition: transform 0.12s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.12s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.12s ease;
+  cursor: pointer;
+}
+
+.neo-btn:hover {
+  transform: translate(-1.5px, -1.5px);
+  box-shadow: 4.5px 4.5px 0px 0px #111111;
+}
+
+.neo-btn:active {
+  transform: translate(1.5px, 1.5px);
+  box-shadow: 1.5px 1.5px 0px 0px #111111;
+}
+
+/* Big Otasukebu PLAY Button Style - Compact & High-Impact */
+.neo-play-btn {
+  background: #111111;
+  color: #FFE500;
+  border: 3px solid #FFE500;
+  box-shadow: 0 0 0 2.5px #111111, 4px 4px 0px 2.5px #111111;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+}
+
+.neo-play-btn:hover {
+  background: #FFE500;
+  color: #111111;
+  border-color: #111111;
+  transform: scale(1.05) translate(-1px, -1px);
+  box-shadow: 0 0 0 2.5px #111111, 6px 6px 0px 2.5px #111111;
+}
+
+.neo-play-btn:active {
+  transform: scale(0.97) translate(1.5px, 1.5px);
+  box-shadow: 0 0 0 2.5px #111111, 2px 2px 0px 2.5px #111111;
+}
+
+/* Otasukebu Grid Background */
+.otasukebu-grid-bg {
+  background-color: #FF2A85;
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.22) 1.5px, transparent 1.5px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.22) 1.5px, transparent 1.5px);
+  background-size: 28px 28px;
+}
+
+/* Caution Hazard Stripes */
+.otasukebu-hazard {
+  background: repeating-linear-gradient(
+    -45deg,
+    #FFE500,
+    #FFE500 14px,
+    #111111 14px,
+    #111111 28px
+  );
+  background-size: 40px 40px;
+  animation: hazard-move 2s linear infinite;
+}
+
+@keyframes hazard-move {
+  0% { background-position: 0 0; }
+  100% { background-position: 40px 0; }
+}
+
+/* White-Black Cyber Diagonal Hazard Stripes (Upwards & Downwards) */
+.cyber-stripes-up {
+  background: repeating-linear-gradient(
+    -45deg,
+    #FFFFFF,
+    #FFFFFF 8px,
+    #111111 8px,
+    #111111 16px
+  );
+  background-size: 22.63px 22.63px;
+  animation: cyber-stripes-up-anim 1.2s linear infinite;
+}
+
+.cyber-stripes-down {
+  background: repeating-linear-gradient(
+    -45deg,
+    #FFFFFF,
+    #FFFFFF 8px,
+    #111111 8px,
+    #111111 16px
+  );
+  background-size: 22.63px 22.63px;
+  animation: cyber-stripes-down-anim 1.2s linear infinite;
+}
+
+@keyframes cyber-stripes-up-anim {
+  0% { background-position: 0 0; }
+  100% { background-position: 0 -22.63px; }
+}
+
+@keyframes cyber-stripes-down-anim {
+  0% { background-position: 0 0; }
+  100% { background-position: 0 22.63px; }
+}
+
+/* Cyber Accent Lines & Decors */
+.cyber-line-horizontal {
+  background: linear-gradient(90deg, transparent 0%, #FFFFFF 15%, #FFFFFF 85%, transparent 100%);
+  height: 2px;
+  position: relative;
+}
+
+.cyber-line-glow {
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.8), 0 0 16px rgba(255, 229, 0, 0.5);
+}
+
+.cyber-circuit-node {
+  width: 6px;
+  height: 6px;
+  background-color: #FFE500;
+  border: 1.5px solid #111111;
+  box-shadow: 0 0 6px #FFE500;
+}
+
+.cyber-hud-corner {
+  position: relative;
+}
+.cyber-hud-corner::before {
+  content: "";
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  width: 8px;
+  height: 8px;
+  border-top: 2px solid #FFE500;
+  border-left: 2px solid #FFE500;
+  pointer-events: none;
+}
+.cyber-hud-corner::after {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 8px;
+  height: 8px;
+  border-bottom: 2px solid #FFE500;
+  border-right: 2px solid #FFE500;
+  pointer-events: none;
+}
+
+/* Side Rail Ribbon Marquee Animations */
+.marquee-track-vertical-up {
+  display: flex;
+  flex-direction: column;
+  animation: marquee-up 18s linear infinite;
+}
+
+.marquee-track-vertical-down {
+  display: flex;
+  flex-direction: column;
+  animation: marquee-down 18s linear infinite;
+}
+
+@keyframes marquee-up {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-50%); }
+}
+
+@keyframes marquee-down {
+  0% { transform: translateY(-50%); }
+  100% { transform: translateY(0); }
+}
+
+/* Floating anime starburst animation */
+@keyframes float-sparkle {
+  0%, 100% { transform: translateY(0) rotate(0deg) scale(1); }
+  50% { transform: translateY(-4px) rotate(12deg) scale(1.08); }
+}
+
+.animate-sparkle {
+  animation: float-sparkle 3s ease-in-out infinite;
+}
+
+/* Horizontal Scroll Deck Architecture */
+.horizontal-scroll-track {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+.horizontal-panel {
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  flex-shrink: 0;
+}
+
+/* Custom Sleek Horizontal Scrollbar */
+.horizontal-scroll-track::-webkit-scrollbar {
+  height: 8px;
+}
+.horizontal-scroll-track::-webkit-scrollbar-track {
+  background: #111111;
+  border-top: 2px solid #000;
+}
+.horizontal-scroll-track::-webkit-scrollbar-thumb {
+  background: #FFE500;
+  border: 1.5px solid #111111;
+  border-radius: 4px;
+}
+.horizontal-scroll-track::-webkit-scrollbar-thumb:hover {
+  background: #FFFFFF;
+}
+
+/* MMORPG window theme */
+.rpg-panel {
+  background: linear-gradient(180deg, rgba(26, 31, 46, 0.95) 0%, rgba(18, 22, 36, 0.98) 100%);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+  backdrop-filter: blur(8px);
+}
+
+.rpg-panel-gold {
+  border: 1px solid rgba(234, 179, 8, 0.35);
+  box-shadow: 0 0 15px rgba(234, 179, 8, 0.15), 0 0 0 1px rgba(254, 240, 138, 0.1) inset;
+}
+
+.rpg-button {
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.25) 0%, rgba(37, 99, 235, 0.35) 100%);
+  border: 1px solid rgba(96, 165, 250, 0.4);
+  transition: all 0.15s ease-out;
+}
+
+.rpg-button:hover {
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.45) 0%, rgba(37, 99, 235, 0.6) 100%);
+  border-color: rgba(147, 197, 253, 0.8);
+  transform: translateY(-1px);
+}
+
+.rpg-button:active {
+  transform: translateY(1px);
+}
+
+#game-canvas {
+  touch-action: none;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  image-rendering: auto;
+}
+
+#game-container {
+  overflow: hidden;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+}
+
+#game-ui {
+  pointer-events: none;
+  transform: translateZ(0);
+}
+
+.gpu-accelerated {
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+  will-change: transform;
+}
+
+.skill-btn, .ping-btn, .action-btn {
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  will-change: transform;
+}

@@ -1,0 +1,7 @@
+{
+  "name": "NEO ARCADE - Web Game Center",
+  "description": "Game Center Web Arcade ultra-cepat: Mainkan 5v5 MOBA Dawn Arena, Anime MMORPG Forest of Savior, Kingdom Idle: Reborn, Truck Simulator: Mud & Cargo, dan Train Simulator: Steel & Rails langsung di desktop browser.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+

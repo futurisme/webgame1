@@ -30,6 +30,8 @@ import {
 } from './stockMarket.js';
 import { generateProceduralCompetitors } from './companyGenerator.js';
 import { StockCanvasChart } from './stockCanvas.js';
+import { renderWorkforceView } from './workforceView.js';
+import { renderStockMarketView, updateStockMarketViewTicks } from './stockMarketView.js';
 import {
   EXECUTIVE_ROLES,
   calculateCSuiteBonuses,
@@ -81,6 +83,16 @@ export class TycoonApp {
     this.companySectorFilter = 'all';
     this.companySortBy = 'marketCap'; // 'marketCap' | 'price' | 'changePct' | 'playerStake' | 'techLevel'
     this.currentOpenDossierSymbol = null;
+
+    // Workforce / Pegawai Tab State
+    this.workforceActiveTier = 'all'; // 'all' | 'csuite' | 'managers' | 'seniors' | 'juniors'
+    this.workforceViewMode = 'grid'; // 'grid' | 'table'
+    this.workforceDeptFilter = 'all'; // 'all' | 'tech' | 'fin' | 'mkt' | 'ops' | 'hr'
+    this.isCandidateDrawerOpen = false;
+
+    // Stock Market Tab State
+    this.stockSearchQuery = '';
+    this.stockSectorFilter = 'all'; // 'all' | 'portfolio' | 'gainers' | 'tech' | 'conglomerate'
 
     // Collapsible Header & Start Screen Customization State
     const saved = this.loadSavedProfile();
@@ -506,299 +518,264 @@ export class TycoonApp {
     const isNetPositive = netCashflow >= 0;
     const isControlling = pcts.founderPct >= 50.0;
 
-    // Fast path: targeted in-place text node updates (zero DOM recreation, 0% CPU overhead)
-    const cashEl = document.getElementById('header-cash');
-    if (!full && cashEl) {
-      cashEl.textContent = formatCurrency(s.cash);
+    const currentMode = headerEl.getAttribute('data-collapsed');
+    const targetMode = String(this.isHeaderCollapsed);
+    const needsFullBuild = full || currentMode !== targetMode || !headerEl.querySelector('.tab-btn');
 
-      const cashflowEl = document.getElementById('header-cashflow');
-      if (cashflowEl) {
-        cashflowEl.textContent = `${isNetPositive ? '+' : ''}${formatCurrency(netCashflow)}/bln`;
-        cashflowEl.className = `font-bold tabular-nums ${isNetPositive ? 'text-emerald-400' : 'text-rose-400'}`;
-      }
-
-      const valEl = document.getElementById('header-valuation');
-      if (valEl) valEl.textContent = formatCurrency(s.valuation, true);
-
-      const priceEl = document.getElementById('header-share-price');
-      if (priceEl) priceEl.textContent = `$${s.sharePrice.toFixed(2)}`;
-
-      const founderEl = document.getElementById('header-founder-stake');
-      if (founderEl) {
-        founderEl.textContent = `${pcts.founderPct.toFixed(1)}% ${isControlling ? '(Mayoritas)' : '(Minoritas)'}`;
-        founderEl.className = `font-bold tabular-nums ${isControlling ? 'text-emerald-400' : 'text-amber-400'}`;
-      }
-
-      const dateEl = document.getElementById('header-date-text');
-      if (dateEl) {
-        dateEl.textContent = `${String(s.day).padStart(2, '0')}/${String(s.month).padStart(2, '0')}/${s.year}`;
-      }
-
-      // Collapsed mode indicators if active
-      const cashColEl = document.getElementById('header-cash-collapsed');
-      if (cashColEl) cashColEl.textContent = formatCurrency(s.cash);
-
-      const cashflowColEl = document.getElementById('header-cashflow-collapsed');
-      if (cashflowColEl) {
-        cashflowColEl.textContent = `${isNetPositive ? '+' : ''}${formatCurrency(netCashflow)}/bln`;
-        cashflowColEl.className = `font-bold tabular-nums ${isNetPositive ? 'text-emerald-400' : 'text-rose-400'}`;
-      }
-
-      const valColEl = document.getElementById('header-val-collapsed');
-      if (valColEl) valColEl.textContent = formatCurrency(s.valuation, true);
-
-      const priceColEl = document.getElementById('header-price-collapsed');
-      if (priceColEl) priceColEl.textContent = `$${s.sharePrice.toFixed(2)}`;
-
-      const founderColEl = document.getElementById('header-founder-collapsed');
-      if (founderColEl) founderColEl.textContent = `${pcts.founderPct.toFixed(1)}%`;
-
-      return;
-    }
-
-    // Full render path with Collapsible & Expandable top bar
-    // Full render path with Collapsible & Expandable top bar
-    if (this.isHeaderCollapsed) {
-      // Sleek Ultra-Compact Single Row (Maximizes Vertical Workspace on 16:9 Displays)
-      headerEl.innerHTML = `
-        <div class="max-w-[1720px] 2xl:max-w-[1840px] mx-auto flex items-center justify-between gap-3">
-          <!-- Left: Return, Identity & Compact Financial Ticker -->
-          <div class="flex items-center gap-2.5 shrink-0">
-            <button id="btn-return-beranda" class="h-8 w-8 inline-flex items-center justify-center text-slate-300 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 hover:border-amber-500/80 rounded-lg transition-all cursor-pointer shadow-sm active:scale-95" title="${t('btn_return', this.lang)}">
-              ${getIcon('gamepad', 'w-4 h-4 text-amber-400')}
-            </button>
-            <div class="flex items-center gap-1.5">
-              <span class="text-xs font-bold tracking-tight text-white font-mono">${s.companyName}</span>
-              <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-900 text-amber-400 border border-slate-700/80 font-bold">${s.ticker}</span>
-              <button id="btn-customize-company" class="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-amber-400 transition-colors cursor-pointer" title="${t('btn_customize', this.lang)}">
-                ${getIcon('sliders', 'w-3 h-3')}
-              </button>
-            </div>
-
-            <!-- Compact Metrics Ribbon -->
-            <div class="hidden xl:flex items-center gap-2 px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-xs font-mono ml-1">
-              <span class="text-slate-400 text-[10px]">${t('hdr_cash_short', this.lang)}</span>
-              <span id="header-cash-collapsed" class="font-bold text-white tabular-nums">${formatCurrency(s.cash)}</span>
-              <span class="text-slate-700">|</span>
-              <span class="text-slate-400 text-[10px]">${t('hdr_cashflow_short', this.lang)}</span>
-              <span id="header-cashflow-collapsed" class="font-bold tabular-nums ${isNetPositive ? 'text-emerald-400' : 'text-rose-400'}">${isNetPositive ? '+' : ''}${formatCurrency(netCashflow)}/bln</span>
-              <span class="text-slate-700">|</span>
-              <span class="text-slate-400 text-[10px]">${t('hdr_val_short', this.lang)}</span>
-              <span id="header-val-collapsed" class="font-bold text-cyan-400 tabular-nums">${formatCurrency(s.valuation, true)}</span>
-              <span class="text-slate-700">|</span>
-              <span class="text-slate-400 text-[10px]">${t('hdr_price_short', this.lang)}</span>
-              <span id="header-price-collapsed" class="font-bold text-amber-400 tabular-nums">$${s.sharePrice.toFixed(2)}</span>
-              <span class="text-slate-700">|</span>
-              <span class="text-slate-400 text-[10px]">${t('hdr_founder_short', this.lang)}</span>
-              <span id="header-founder-collapsed" class="font-bold text-emerald-400 tabular-nums">${pcts.founderPct.toFixed(1)}%</span>
-            </div>
-          </div>
-
-          <!-- Center: Navigation Tabs in Compact Bar -->
-          <nav class="flex items-center gap-1 overflow-x-auto scrollbar-none">
-            <button class="tab-btn h-8 inline-flex items-center gap-1.5 px-3 text-xs font-semibold rounded-lg transition-all whitespace-nowrap cursor-pointer active:scale-[0.98] ${this.activeTab === 'hq' ? 'active-tab' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent'}" data-tab="hq" data-active="${this.activeTab === 'hq'}">
-              ${getIcon('building', 'w-3.5 h-3.5 text-amber-400')}
-              <span>${t('tab_hq', this.lang)}</span>
-            </button>
-            <button class="tab-btn h-8 inline-flex items-center gap-1.5 px-3 text-xs font-semibold rounded-lg transition-all whitespace-nowrap cursor-pointer active:scale-[0.98] ${this.activeTab === 'stocks' ? 'active-tab' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent'}" data-tab="stocks" data-active="${this.activeTab === 'stocks'}">
-              ${getIcon('trendingUp', 'w-3.5 h-3.5 text-emerald-400')}
-              <span>${t('tab_stocks', this.lang)}</span>
-            </button>
-            <button class="tab-btn h-8 inline-flex items-center gap-1.5 px-3 text-xs font-semibold rounded-lg transition-all whitespace-nowrap cursor-pointer active:scale-[0.98] ${this.activeTab === 'companies' ? 'active-tab' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent'}" data-tab="companies" data-active="${this.activeTab === 'companies'}">
-              ${getIcon('globe', 'w-3.5 h-3.5 text-cyan-400')}
-              <span>${t('tab_companies', this.lang)}</span>
-              <span class="px-1.5 py-0.2 text-[10px] rounded bg-cyan-500/20 text-cyan-300 font-mono font-bold">20</span>
-            </button>
-            <button class="tab-btn h-8 inline-flex items-center gap-1.5 px-3 text-xs font-semibold rounded-lg transition-all whitespace-nowrap cursor-pointer active:scale-[0.98] ${this.activeTab === 'equity' ? 'active-tab' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent'}" data-tab="equity" data-active="${this.activeTab === 'equity'}">
-              ${getIcon('pieChart', 'w-3.5 h-3.5 text-blue-400')}
-              <span>${t('tab_equity', this.lang)}</span>
-              ${s.activeTermSheets.length > 0 ? `<span class="px-1.5 py-0.2 text-[10px] rounded bg-amber-500/20 text-amber-300 font-mono font-bold">${s.activeTermSheets.length}</span>` : ''}
-            </button>
-            <button class="tab-btn h-8 inline-flex items-center gap-1.5 px-3 text-xs font-semibold rounded-lg transition-all whitespace-nowrap cursor-pointer active:scale-[0.98] ${this.activeTab === 'csuite' ? 'active-tab' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent'}" data-tab="csuite" data-active="${this.activeTab === 'csuite'}">
-              ${getIcon('users', 'w-3.5 h-3.5 text-purple-400')}
-              <span>${t('tab_csuite', this.lang)}</span>
-              <span class="px-1.5 py-0.2 text-[10px] rounded bg-purple-500/20 text-purple-300 font-mono font-bold">${wfStats.totalHeadcount}</span>
-            </button>
-            <button class="tab-btn h-8 inline-flex items-center gap-1.5 px-3 text-xs font-semibold rounded-lg transition-all whitespace-nowrap cursor-pointer active:scale-[0.98] ${this.activeTab === 'rnd' ? 'active-tab' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent'}" data-tab="rnd" data-active="${this.activeTab === 'rnd'}">
-              ${getIcon('cpu', 'w-3.5 h-3.5 text-cyan-400')}
-              <span>${t('tab_rnd', this.lang)}</span>
-            </button>
-          </nav>
-
-          <!-- Right: Controls & Expand Button -->
-          <div class="flex items-center gap-2 shrink-0">
-            <!-- Speed Selector -->
-            <div class="h-8 inline-flex items-center bg-slate-900 border border-slate-800 rounded-lg p-0.5 gap-0.5">
-              <button class="btn-speed h-7 px-2 inline-flex items-center justify-center rounded-md transition-all active:scale-95 cursor-pointer ${s.gameSpeed === 0 ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800'}" data-speed="0" title="${t('btn_pause', this.lang)}">
-                ${getIcon('pause', 'w-3.5 h-3.5')}
-              </button>
-              <button class="btn-speed h-7 px-2 inline-flex items-center justify-center text-xs font-mono font-semibold rounded-md transition-all active:scale-95 cursor-pointer ${s.gameSpeed === 1 ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800'}" data-speed="1" title="${t('btn_speed_1', this.lang)}">
-                1x
-              </button>
-              <button class="btn-speed h-7 px-2 inline-flex items-center justify-center rounded-md transition-all active:scale-95 cursor-pointer ${s.gameSpeed === 2 ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800'}" data-speed="2" title="${t('btn_speed_2', this.lang)}">
-                ${getIcon('fastForward', 'w-3.5 h-3.5')}
-              </button>
-              <button class="btn-speed h-7 px-2 inline-flex items-center justify-center rounded-md transition-all active:scale-95 cursor-pointer ${s.gameSpeed === 5 ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800'}" data-speed="5" title="${t('btn_speed_5', this.lang)}">
-                ${getIcon('zap', 'w-3.5 h-3.5')}
-              </button>
-            </div>
-
-            <!-- Audio Mute -->
-            <button id="btn-toggle-sound" class="h-8 w-8 inline-flex items-center justify-center bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 rounded-lg transition-all active:scale-95 cursor-pointer" title="${soundEngine.isMuted ? t('btn_sound_unmute', this.lang) : t('btn_sound_mute', this.lang)}">
-              ${getIcon(soundEngine.isMuted ? 'volumeMute' : 'volume', 'w-4 h-4')}
-            </button>
-
-            <!-- Expand Bar Toggle Button -->
-            <button id="btn-toggle-header-collapse" class="h-8 px-2.5 inline-flex items-center gap-1.5 text-xs text-amber-400 hover:text-amber-300 bg-slate-900 hover:bg-slate-800 border border-amber-500/40 rounded-lg transition-all cursor-pointer font-bold shadow-sm" title="${t('btn_expand_tooltip', this.lang)}">
-              ${getIcon('sliders', 'w-3.5 h-3.5')}
-              <span class="hidden sm:inline">${t('btn_expand', this.lang)}</span>
-            </button>
-          </div>
-        </div>
-      `;
-    } else {
-      // Expanded High-Precision Command Header
-      headerEl.innerHTML = `
-        <div class="max-w-[1720px] 2xl:max-w-[1840px] mx-auto flex flex-col gap-2">
-          <!-- Zone 1: Brand, Financial KPIs Strip & Global Controls -->
-          <div class="flex items-center justify-between gap-3">
-            <!-- Brand & Return -->
+    if (needsFullBuild) {
+      headerEl.setAttribute('data-collapsed', targetMode);
+      if (this.isHeaderCollapsed) {
+        // Collapsed Single-Row Header
+        headerEl.innerHTML = `
+          <div class="max-w-[1720px] 2xl:max-w-[1840px] mx-auto flex items-center justify-between gap-3 select-none">
+            <!-- Left: Return, Identity & Compact Financial Ticker -->
             <div class="flex items-center gap-2.5 shrink-0">
-              <button id="btn-return-beranda" class="h-8 w-8 inline-flex items-center justify-center text-slate-300 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 hover:border-amber-500/80 rounded-lg transition-all cursor-pointer shadow-sm group active:scale-95" title="${t('btn_return', this.lang)}">
-                ${getIcon('gamepad', 'w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform')}
+              <button id="btn-return-beranda" class="h-8 w-8 inline-flex items-center justify-center text-slate-300 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 hover:border-amber-500/80 rounded-lg transition-all cursor-pointer shadow-sm active:scale-95" title="${t('btn_return', this.lang)}">
+                ${getIcon('gamepad', 'w-4 h-4 text-amber-400')}
               </button>
-              <div class="flex items-baseline gap-2">
-                <span class="text-sm font-bold tracking-tight text-white font-mono">${s.companyName}</span>
-                <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-900 text-amber-400 border border-slate-700/80 font-bold">${s.ticker}</span>
+              <div class="flex items-center gap-1.5">
+                <span id="header-company-name-collapsed" class="text-xs font-bold tracking-tight text-white font-mono">${s.companyName}</span>
+                <span id="header-company-ticker-collapsed" class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-900 text-amber-400 border border-slate-700/80 font-bold">${s.ticker}</span>
                 <button id="btn-customize-company" class="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-amber-400 transition-colors cursor-pointer" title="${t('btn_customize', this.lang)}">
-                  ${getIcon('sliders', 'w-3.5 h-3.5')}
+                  ${getIcon('sliders', 'w-3 h-3')}
                 </button>
               </div>
-            </div>
 
-            <!-- Financial KPIs Strip (High-Precision Desktop Tabular View) -->
-            <div class="flex items-center gap-4 text-xs font-mono">
-              <!-- Cash -->
-              <div class="flex flex-col">
-                <span class="text-[10px] text-slate-400 uppercase font-sans">${t('hdr_cash', this.lang)}</span>
-                <span id="header-cash" class="font-bold text-white tabular-nums">${formatCurrency(s.cash)}</span>
-              </div>
-              <div class="w-px h-6 bg-slate-800"></div>
-              <!-- Net Flow -->
-              <div class="flex flex-col">
-                <span class="text-[10px] text-slate-400 uppercase font-sans">${t('hdr_cashflow', this.lang)}</span>
-                <span id="header-cashflow" class="font-bold tabular-nums ${isNetPositive ? 'text-emerald-400' : 'text-rose-400'}">
-                  ${isNetPositive ? '+' : ''}${formatCurrency(netCashflow)}/bln
-                </span>
-              </div>
-              <div class="w-px h-6 bg-slate-800"></div>
-              <!-- Valuation -->
-              <div class="flex flex-col">
-                <span class="text-[10px] text-slate-400 uppercase font-sans">${t('hdr_valuation', this.lang)}</span>
-                <span id="header-valuation" class="font-bold text-cyan-400 tabular-nums">${formatCurrency(s.valuation, true)}</span>
-              </div>
-              <div class="w-px h-6 bg-slate-800"></div>
-              <!-- Share Price -->
-              <div class="flex flex-col">
-                <span class="text-[10px] text-slate-400 uppercase font-sans">${t('hdr_share_price', this.lang)}</span>
-                <span id="header-share-price" class="font-bold text-amber-400 tabular-nums">$${s.sharePrice.toFixed(2)}</span>
-              </div>
-              <div class="w-px h-6 bg-slate-800"></div>
-              <!-- Founder Stake -->
-              <div class="flex flex-col">
-                <span class="text-[10px] text-slate-400 uppercase font-sans">${t('hdr_founder_stake', this.lang)}</span>
-                <span id="header-founder-stake" class="font-bold tabular-nums ${isControlling ? 'text-emerald-400' : 'text-amber-400'}">
-                  ${pcts.founderPct.toFixed(1)}% ${isControlling ? t('hdr_majority', this.lang) : t('hdr_minority', this.lang)}
-                </span>
+              <!-- Compact Metrics Ribbon -->
+              <div class="hidden xl:flex items-center gap-2 px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-xs font-mono ml-1">
+                <span class="text-slate-400 text-[10px]">${t('hdr_cash_short', this.lang)}</span>
+                <span id="header-cash-collapsed" class="font-bold text-white tabular-nums">${formatCurrency(s.cash)}</span>
+                <span class="text-slate-700">|</span>
+                <span class="text-slate-400 text-[10px]">${t('hdr_cashflow_short', this.lang)}</span>
+                <span id="header-cashflow-collapsed" class="font-bold tabular-nums ${isNetPositive ? 'text-emerald-400' : 'text-rose-400'}">${isNetPositive ? '+' : ''}${formatCurrency(netCashflow)}/bln</span>
+                <span class="text-slate-700">|</span>
+                <span class="text-slate-400 text-[10px]">${t('hdr_val_short', this.lang)}</span>
+                <span id="header-val-collapsed" class="font-bold text-cyan-400 tabular-nums">${formatCurrency(s.valuation, true)}</span>
+                <span class="text-slate-700">|</span>
+                <span class="text-slate-400 text-[10px]">${t('hdr_price_short', this.lang)}</span>
+                <span id="header-price-collapsed" class="font-bold text-amber-400 tabular-nums">$${s.sharePrice.toFixed(2)}</span>
+                <span class="text-slate-700">|</span>
+                <span class="text-slate-400 text-[10px]">${t('hdr_founder_short', this.lang)}</span>
+                <span id="header-founder-collapsed" class="font-bold text-emerald-400 tabular-nums">${pcts.founderPct.toFixed(1)}%</span>
               </div>
             </div>
 
-            <!-- Controls: Speed, Audio, IPO & Collapse Button -->
+            <!-- Center: Navigation Tabs in Compact Bar -->
+            <nav class="flex items-center gap-1 overflow-x-auto scrollbar-none">
+              <button class="tab-btn h-8 inline-flex items-center gap-1.5 px-3 text-xs font-semibold rounded-lg transition-all whitespace-nowrap cursor-pointer active:scale-[0.98] ${this.activeTab === 'hq' ? 'active-tab' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent'}" data-tab="hq" data-active="${this.activeTab === 'hq'}">
+                ${getIcon('building', 'w-3.5 h-3.5 text-amber-400')}
+                <span>${t('tab_hq', this.lang)}</span>
+              </button>
+              <button class="tab-btn h-8 inline-flex items-center gap-1.5 px-3 text-xs font-semibold rounded-lg transition-all whitespace-nowrap cursor-pointer active:scale-[0.98] ${this.activeTab === 'stocks' ? 'active-tab' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent'}" data-tab="stocks" data-active="${this.activeTab === 'stocks'}">
+                ${getIcon('trendingUp', 'w-3.5 h-3.5 text-emerald-400')}
+                <span>${t('tab_stocks', this.lang)}</span>
+              </button>
+              <button class="tab-btn h-8 inline-flex items-center gap-1.5 px-3 text-xs font-semibold rounded-lg transition-all whitespace-nowrap cursor-pointer active:scale-[0.98] ${this.activeTab === 'companies' ? 'active-tab' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent'}" data-tab="companies" data-active="${this.activeTab === 'companies'}">
+                ${getIcon('globe', 'w-3.5 h-3.5 text-cyan-400')}
+                <span>${t('tab_companies', this.lang)}</span>
+                <span class="header-badge-companies px-1.5 py-0.2 text-[10px] rounded bg-cyan-500/20 text-cyan-300 font-mono font-bold">20</span>
+              </button>
+              <button class="tab-btn h-8 inline-flex items-center gap-1.5 px-3 text-xs font-semibold rounded-lg transition-all whitespace-nowrap cursor-pointer active:scale-[0.98] ${this.activeTab === 'equity' ? 'active-tab' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent'}" data-tab="equity" data-active="${this.activeTab === 'equity'}">
+                ${getIcon('pieChart', 'w-3.5 h-3.5 text-blue-400')}
+                <span>${t('tab_equity', this.lang)}</span>
+                <span class="header-badge-equity px-1.5 py-0.2 text-[10px] rounded bg-amber-500/20 text-amber-300 font-mono font-bold ${s.activeTermSheets.length > 0 ? '' : 'hidden'}">${s.activeTermSheets.length}</span>
+              </button>
+              <button class="tab-btn h-8 inline-flex items-center gap-1.5 px-3 text-xs font-semibold rounded-lg transition-all whitespace-nowrap cursor-pointer active:scale-[0.98] ${this.activeTab === 'csuite' ? 'active-tab' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent'}" data-tab="csuite" data-active="${this.activeTab === 'csuite'}">
+                ${getIcon('users', 'w-3.5 h-3.5 text-purple-400')}
+                <span>${t('tab_csuite', this.lang)}</span>
+                <span class="header-badge-csuite px-1.5 py-0.2 text-[10px] rounded bg-purple-500/20 text-purple-300 font-mono font-bold">${wfStats.totalHeadcount}</span>
+              </button>
+              <button class="tab-btn h-8 inline-flex items-center gap-1.5 px-3 text-xs font-semibold rounded-lg transition-all whitespace-nowrap cursor-pointer active:scale-[0.98] ${this.activeTab === 'rnd' ? 'active-tab' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent'}" data-tab="rnd" data-active="${this.activeTab === 'rnd'}">
+                ${getIcon('cpu', 'w-3.5 h-3.5 text-cyan-400')}
+                <span>${t('tab_rnd', this.lang)}</span>
+                <span class="header-badge-rnd text-[10px] font-mono text-cyan-400">LVL ${s.techLevel}</span>
+              </button>
+            </nav>
+
+            <!-- Right: Controls & Expand Button -->
             <div class="flex items-center gap-2 shrink-0">
-              <!-- Calendar Date Badge -->
-              <div class="h-8 inline-flex items-center gap-1.5 px-2.5 bg-slate-900 border border-slate-800 rounded-lg text-xs font-mono text-slate-300">
-                ${getIcon('calendar', 'w-3.5 h-3.5 text-slate-400')}
-                <span id="header-date-text">${String(s.day).padStart(2, '0')}/${String(s.month).padStart(2, '0')}/${s.year}</span>
-              </div>
-
               <!-- Speed Selector -->
               <div class="h-8 inline-flex items-center bg-slate-900 border border-slate-800 rounded-lg p-0.5 gap-0.5">
-                <button class="btn-speed h-7 px-2 inline-flex items-center justify-center rounded-md transition-all active:scale-95 cursor-pointer ${s.gameSpeed === 0 ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800'}" data-speed="0" title="${t('btn_pause', this.lang)}">
+                <button class="btn-speed h-7 px-2 inline-flex items-center justify-center rounded-md transition-all active:scale-95 cursor-pointer ${s.gameSpeed === 0 ? 'bg-amber-500 text-slate-950 font-bold shadow-sm' : 'text-slate-400 hover:text-white hover:bg-slate-800'}" data-speed="0" title="${t('btn_pause', this.lang)}">
                   ${getIcon('pause', 'w-3.5 h-3.5')}
                 </button>
-                <button class="btn-speed h-7 px-2.5 inline-flex items-center justify-center text-xs font-mono font-semibold rounded-md transition-all active:scale-95 cursor-pointer ${s.gameSpeed === 1 ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800'}" data-speed="1" title="${t('btn_speed_1', this.lang)}">
+                <button class="btn-speed h-7 px-2.5 inline-flex items-center justify-center text-xs font-mono font-semibold rounded-md transition-all active:scale-95 cursor-pointer ${s.gameSpeed === 1 ? 'bg-amber-500 text-slate-950 font-bold shadow-sm' : 'text-slate-400 hover:text-white hover:bg-slate-800'}" data-speed="1" title="${t('btn_speed_1', this.lang)}">
                   1x
                 </button>
-                <button class="btn-speed h-7 px-2 inline-flex items-center justify-center rounded-md transition-all active:scale-95 cursor-pointer ${s.gameSpeed === 2 ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800'}" data-speed="2" title="${t('btn_speed_2', this.lang)}">
+                <button class="btn-speed h-7 px-2 inline-flex items-center justify-center rounded-md transition-all active:scale-95 cursor-pointer ${s.gameSpeed === 2 ? 'bg-amber-500 text-slate-950 font-bold shadow-sm' : 'text-slate-400 hover:text-white hover:bg-slate-800'}" data-speed="2" title="${t('btn_speed_2', this.lang)}">
                   ${getIcon('fastForward', 'w-3.5 h-3.5')}
                 </button>
-                <button class="btn-speed h-7 px-2 inline-flex items-center justify-center rounded-md transition-all active:scale-95 cursor-pointer ${s.gameSpeed === 5 ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800'}" data-speed="5" title="${t('btn_speed_5', this.lang)}">
+                <button class="btn-speed h-7 px-2 inline-flex items-center justify-center rounded-md transition-all active:scale-95 cursor-pointer ${s.gameSpeed === 5 ? 'bg-amber-500 text-slate-950 font-bold shadow-sm' : 'text-slate-400 hover:text-white hover:bg-slate-800'}" data-speed="5" title="${t('btn_speed_5', this.lang)}">
                   ${getIcon('zap', 'w-3.5 h-3.5')}
                 </button>
               </div>
 
-              <!-- Audio Mute Icon-Button -->
+              <!-- Audio Mute -->
               <button id="btn-toggle-sound" class="h-8 w-8 inline-flex items-center justify-center bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 rounded-lg transition-all active:scale-95 cursor-pointer" title="${soundEngine.isMuted ? t('btn_sound_unmute', this.lang) : t('btn_sound_mute', this.lang)}">
                 ${getIcon(soundEngine.isMuted ? 'volumeMute' : 'volume', 'w-4 h-4')}
               </button>
 
-              <!-- IPO Action Icon-Button -->
-              ${!s.isIpoCompleted ? `
-                <button id="btn-open-ipo" class="h-8 inline-flex items-center gap-1.5 px-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs rounded-lg shadow-sm transition-all active:scale-95 cursor-pointer group" title="${t('btn_ipo_tooltip', this.lang)}">
-                  ${getIcon('rocket', 'w-4 h-4 group-hover:scale-110 transition-transform')}
-                  <span>${t('btn_ipo', this.lang)}</span>
-                </button>
-              ` : `
-                <div class="h-8 inline-flex items-center gap-1.5 px-2.5 bg-emerald-950/80 border border-emerald-600/40 text-emerald-400 text-xs font-mono font-bold rounded-lg" title="${t('badge_public_tooltip', this.lang)}">
-                  ${getIcon('checkCircle', 'w-3.5 h-3.5')}
-                  <span>${t('badge_public', this.lang)}</span>
-                </div>
-              `}
-
-              <!-- Collapse Bar Button -->
-              <button id="btn-toggle-header-collapse" class="h-8 px-2.5 inline-flex items-center gap-1 text-xs text-slate-400 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 rounded-lg transition-all cursor-pointer font-medium" title="${t('btn_collapse_tooltip', this.lang)}">
-                ${getIcon('sliders', 'w-3.5 h-3.5 text-slate-400')}
-                <span class="hidden sm:inline">${t('btn_collapse', this.lang)}</span>
+              <!-- Expand Bar Toggle Button -->
+              <button id="btn-toggle-header-collapse" class="h-8 px-2.5 inline-flex items-center gap-1.5 text-xs text-amber-400 hover:text-amber-300 bg-slate-900 hover:bg-slate-800 border border-amber-500/40 rounded-lg transition-all cursor-pointer font-bold shadow-sm" title="${t('btn_expand_tooltip', this.lang)}">
+                ${getIcon('sliders', 'w-3.5 h-3.5')}
+                <span class="hidden sm:inline">${t('btn_expand', this.lang)}</span>
               </button>
             </div>
           </div>
+        `;
+      } else {
+        // Expanded High-Precision Command Header
+        headerEl.innerHTML = `
+          <div class="max-w-[1720px] 2xl:max-w-[1840px] mx-auto flex flex-col gap-2 select-none">
+            <!-- Zone 1: Brand, Financial KPIs Strip & Global Controls -->
+            <div class="flex items-center justify-between gap-3">
+              <!-- Brand & Return -->
+              <div class="flex items-center gap-2.5 shrink-0">
+                <button id="btn-return-beranda" class="h-8 w-8 inline-flex items-center justify-center text-slate-300 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 hover:border-amber-500/80 rounded-lg transition-all cursor-pointer shadow-sm group active:scale-95" title="${t('btn_return', this.lang)}">
+                  ${getIcon('gamepad', 'w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform')}
+                </button>
+                <div class="flex items-baseline gap-2">
+                  <span id="header-company-name" class="text-sm font-bold tracking-tight text-white font-mono">${s.companyName}</span>
+                  <span id="header-company-ticker" class="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-900 text-amber-400 border border-slate-700/80 font-bold">${s.ticker}</span>
+                  <button id="btn-customize-company" class="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-amber-400 transition-colors cursor-pointer" title="${t('btn_customize', this.lang)}">
+                    ${getIcon('sliders', 'w-3.5 h-3.5')}
+                  </button>
+                </div>
+              </div>
 
-          <!-- Zone 2: Navigation Tabs Row -->
-          <nav class="flex items-center gap-1.5 border-t border-slate-800/60 pt-1.5 overflow-x-auto scrollbar-none">
-            <button class="tab-btn h-8 inline-flex items-center gap-1.5 px-3.5 text-xs font-semibold rounded-lg transition-all whitespace-nowrap cursor-pointer active:scale-[0.98] ${this.activeTab === 'hq' ? 'active-tab' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent'}" data-tab="hq" data-active="${this.activeTab === 'hq'}">
-              ${getIcon('building', 'w-3.5 h-3.5 text-amber-400')}
-              <span>${t('tab_hq', this.lang)}</span>
-            </button>
-            <button class="tab-btn h-8 inline-flex items-center gap-1.5 px-3.5 text-xs font-semibold rounded-lg transition-all whitespace-nowrap cursor-pointer active:scale-[0.98] ${this.activeTab === 'stocks' ? 'active-tab' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent'}" data-tab="stocks" data-active="${this.activeTab === 'stocks'}">
-              ${getIcon('trendingUp', 'w-3.5 h-3.5 text-emerald-400')}
-              <span>${t('tab_stocks', this.lang)}</span>
-            </button>
-            <button class="tab-btn h-8 inline-flex items-center gap-1.5 px-3.5 text-xs font-semibold rounded-lg transition-all whitespace-nowrap cursor-pointer active:scale-[0.98] ${this.activeTab === 'companies' ? 'active-tab' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent'}" data-tab="companies" data-active="${this.activeTab === 'companies'}">
-              ${getIcon('globe', 'w-3.5 h-3.5 text-cyan-400')}
-              <span>${t('tab_companies', this.lang)}</span>
-              <span class="px-1.5 py-0.2 text-[10px] rounded bg-cyan-500/20 text-cyan-300 font-mono font-bold">20</span>
-            </button>
-            <button class="tab-btn h-8 inline-flex items-center gap-1.5 px-3.5 text-xs font-semibold rounded-lg transition-all whitespace-nowrap cursor-pointer active:scale-[0.98] ${this.activeTab === 'equity' ? 'active-tab' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent'}" data-tab="equity" data-active="${this.activeTab === 'equity'}">
-              ${getIcon('pieChart', 'w-3.5 h-3.5 text-blue-400')}
-              <span>${t('tab_equity', this.lang)}</span>
-              ${s.activeTermSheets.length > 0 ? `<span class="px-1.5 py-0.2 text-[10px] rounded bg-amber-500/20 text-amber-300 font-mono font-bold">${s.activeTermSheets.length}</span>` : ''}
-            </button>
-            <button class="tab-btn h-8 inline-flex items-center gap-1.5 px-3.5 text-xs font-semibold rounded-lg transition-all whitespace-nowrap cursor-pointer active:scale-[0.98] ${this.activeTab === 'csuite' ? 'active-tab' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent'}" data-tab="csuite" data-active="${this.activeTab === 'csuite'}">
-              ${getIcon('users', 'w-3.5 h-3.5 text-purple-400')}
-              <span>${t('tab_csuite', this.lang)}</span>
-              <span class="px-1.5 py-0.2 text-[10px] rounded bg-purple-500/20 text-purple-300 font-mono font-bold">${wfStats.totalHeadcount}</span>
-            </button>
-            <button class="tab-btn h-8 inline-flex items-center gap-1.5 px-3.5 text-xs font-semibold rounded-lg transition-all whitespace-nowrap cursor-pointer active:scale-[0.98] ${this.activeTab === 'rnd' ? 'active-tab' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent'}" data-tab="rnd" data-active="${this.activeTab === 'rnd'}">
-              ${getIcon('cpu', 'w-3.5 h-3.5 text-cyan-400')}
-              <span>${t('tab_rnd', this.lang)}</span>
-              <span class="text-[10px] font-mono text-cyan-400">LVL ${s.techLevel}</span>
-            </button>
-          </nav>
-        </div>
-      `;
+              <!-- Financial KPIs Strip (High-Precision Desktop Tabular View) -->
+              <div class="flex items-center gap-4 text-xs font-mono">
+                <!-- Cash -->
+                <div class="flex flex-col">
+                  <span class="text-[10px] text-slate-400 uppercase font-sans">${t('hdr_cash', this.lang)}</span>
+                  <span id="header-cash" class="font-bold text-white tabular-nums">${formatCurrency(s.cash)}</span>
+                </div>
+                <div class="w-px h-6 bg-slate-800"></div>
+                <!-- Net Flow -->
+                <div class="flex flex-col">
+                  <span class="text-[10px] text-slate-400 uppercase font-sans">${t('hdr_cashflow', this.lang)}</span>
+                  <span id="header-cashflow" class="font-bold tabular-nums ${isNetPositive ? 'text-emerald-400' : 'text-rose-400'}">
+                    ${isNetPositive ? '+' : ''}${formatCurrency(netCashflow)}/bln
+                  </span>
+                </div>
+                <div class="w-px h-6 bg-slate-800"></div>
+                <!-- Valuation -->
+                <div class="flex flex-col">
+                  <span class="text-[10px] text-slate-400 uppercase font-sans">${t('hdr_valuation', this.lang)}</span>
+                  <span id="header-valuation" class="font-bold text-cyan-400 tabular-nums">${formatCurrency(s.valuation, true)}</span>
+                </div>
+                <div class="w-px h-6 bg-slate-800"></div>
+                <!-- Share Price -->
+                <div class="flex flex-col">
+                  <span class="text-[10px] text-slate-400 uppercase font-sans">${t('hdr_share_price', this.lang)}</span>
+                  <span id="header-share-price" class="font-bold text-amber-400 tabular-nums">$${s.sharePrice.toFixed(2)}</span>
+                </div>
+                <div class="w-px h-6 bg-slate-800"></div>
+                <!-- Founder Stake -->
+                <div class="flex flex-col">
+                  <span class="text-[10px] text-slate-400 uppercase font-sans">${t('hdr_founder_stake', this.lang)}</span>
+                  <span id="header-founder-stake" class="font-bold tabular-nums ${isControlling ? 'text-emerald-400' : 'text-amber-400'}">
+                    ${pcts.founderPct.toFixed(1)}% ${isControlling ? t('hdr_majority', this.lang) : t('hdr_minority', this.lang)}
+                  </span>
+                </div>
+              </div>
+
+              <!-- Controls: Speed, Audio, IPO & Collapse Button -->
+              <div class="flex items-center gap-2 shrink-0">
+                <!-- Calendar Date Badge -->
+                <div class="h-8 inline-flex items-center gap-1.5 px-2.5 bg-slate-900 border border-slate-800 rounded-lg text-xs font-mono text-slate-300">
+                  ${getIcon('calendar', 'w-3.5 h-3.5 text-slate-400')}
+                  <span id="header-date-text">${String(s.day).padStart(2, '0')}/${String(s.month).padStart(2, '0')}/${s.year}</span>
+                </div>
+
+                <!-- Speed Selector -->
+                <div class="h-8 inline-flex items-center bg-slate-900 border border-slate-800 rounded-lg p-0.5 gap-0.5">
+                  <button class="btn-speed h-7 px-2 inline-flex items-center justify-center rounded-md transition-all active:scale-95 cursor-pointer ${s.gameSpeed === 0 ? 'bg-amber-500 text-slate-950 font-bold shadow-sm' : 'text-slate-400 hover:text-white hover:bg-slate-800'}" data-speed="0" title="${t('btn_pause', this.lang)}">
+                    ${getIcon('pause', 'w-3.5 h-3.5')}
+                  </button>
+                  <button class="btn-speed h-7 px-2.5 inline-flex items-center justify-center text-xs font-mono font-semibold rounded-md transition-all active:scale-95 cursor-pointer ${s.gameSpeed === 1 ? 'bg-amber-500 text-slate-950 font-bold shadow-sm' : 'text-slate-400 hover:text-white hover:bg-slate-800'}" data-speed="1" title="${t('btn_speed_1', this.lang)}">
+                    1x
+                  </button>
+                  <button class="btn-speed h-7 px-2 inline-flex items-center justify-center rounded-md transition-all active:scale-95 cursor-pointer ${s.gameSpeed === 2 ? 'bg-amber-500 text-slate-950 font-bold shadow-sm' : 'text-slate-400 hover:text-white hover:bg-slate-800'}" data-speed="2" title="${t('btn_speed_2', this.lang)}">
+                    ${getIcon('fastForward', 'w-3.5 h-3.5')}
+                  </button>
+                  <button class="btn-speed h-7 px-2 inline-flex items-center justify-center rounded-md transition-all active:scale-95 cursor-pointer ${s.gameSpeed === 5 ? 'bg-amber-500 text-slate-950 font-bold shadow-sm' : 'text-slate-400 hover:text-white hover:bg-slate-800'}" data-speed="5" title="${t('btn_speed_5', this.lang)}">
+                    ${getIcon('zap', 'w-3.5 h-3.5')}
+                  </button>
+                </div>
+
+                <!-- Audio Mute Icon-Button -->
+                <button id="btn-toggle-sound" class="h-8 w-8 inline-flex items-center justify-center bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 rounded-lg transition-all active:scale-95 cursor-pointer" title="${soundEngine.isMuted ? t('btn_sound_unmute', this.lang) : t('btn_sound_mute', this.lang)}">
+                  ${getIcon(soundEngine.isMuted ? 'volumeMute' : 'volume', 'w-4 h-4')}
+                </button>
+
+                <!-- IPO Action Slot -->
+                <div id="header-ipo-slot">
+                  ${!s.isIpoCompleted ? `
+                    <button id="btn-open-ipo" class="h-8 inline-flex items-center gap-1.5 px-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs rounded-lg shadow-sm transition-all active:scale-95 cursor-pointer group" title="${t('btn_ipo_tooltip', this.lang)}">
+                      ${getIcon('rocket', 'w-4 h-4 group-hover:scale-110 transition-transform')}
+                      <span>${t('btn_ipo', this.lang)}</span>
+                    </button>
+                  ` : `
+                    <div class="h-8 inline-flex items-center gap-1.5 px-2.5 bg-emerald-950/80 border border-emerald-600/40 text-emerald-400 text-xs font-mono font-bold rounded-lg" title="${t('badge_public_tooltip', this.lang)}">
+                      ${getIcon('checkCircle', 'w-3.5 h-3.5')}
+                      <span>${t('badge_public', this.lang)}</span>
+                    </div>
+                  `}
+                </div>
+
+                <!-- Collapse Bar Button -->
+                <button id="btn-toggle-header-collapse" class="h-8 px-2.5 inline-flex items-center gap-1 text-xs text-slate-400 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 rounded-lg transition-all cursor-pointer font-medium" title="${t('btn_collapse_tooltip', this.lang)}">
+                  ${getIcon('sliders', 'w-3.5 h-3.5 text-slate-400')}
+                  <span class="hidden sm:inline">${t('btn_collapse', this.lang)}</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Zone 2: Navigation Tabs Row -->
+            <nav class="flex items-center gap-1.5 border-t border-slate-800/60 pt-1.5 overflow-x-auto scrollbar-none">
+              <button class="tab-btn h-8 inline-flex items-center gap-1.5 px-3.5 text-xs font-semibold rounded-lg transition-all whitespace-nowrap cursor-pointer active:scale-[0.98] ${this.activeTab === 'hq' ? 'active-tab' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent'}" data-tab="hq" data-active="${this.activeTab === 'hq'}">
+                ${getIcon('building', 'w-3.5 h-3.5 text-amber-400')}
+                <span>${t('tab_hq', this.lang)}</span>
+              </button>
+              <button class="tab-btn h-8 inline-flex items-center gap-1.5 px-3.5 text-xs font-semibold rounded-lg transition-all whitespace-nowrap cursor-pointer active:scale-[0.98] ${this.activeTab === 'stocks' ? 'active-tab' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent'}" data-tab="stocks" data-active="${this.activeTab === 'stocks'}">
+                ${getIcon('trendingUp', 'w-3.5 h-3.5 text-emerald-400')}
+                <span>${t('tab_stocks', this.lang)}</span>
+              </button>
+              <button class="tab-btn h-8 inline-flex items-center gap-1.5 px-3.5 text-xs font-semibold rounded-lg transition-all whitespace-nowrap cursor-pointer active:scale-[0.98] ${this.activeTab === 'companies' ? 'active-tab' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent'}" data-tab="companies" data-active="${this.activeTab === 'companies'}">
+                ${getIcon('globe', 'w-3.5 h-3.5 text-cyan-400')}
+                <span>${t('tab_companies', this.lang)}</span>
+                <span class="header-badge-companies px-1.5 py-0.2 text-[10px] rounded bg-cyan-500/20 text-cyan-300 font-mono font-bold">20</span>
+              </button>
+              <button class="tab-btn h-8 inline-flex items-center gap-1.5 px-3.5 text-xs font-semibold rounded-lg transition-all whitespace-nowrap cursor-pointer active:scale-[0.98] ${this.activeTab === 'equity' ? 'active-tab' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent'}" data-tab="equity" data-active="${this.activeTab === 'equity'}">
+                ${getIcon('pieChart', 'w-3.5 h-3.5 text-blue-400')}
+                <span>${t('tab_equity', this.lang)}</span>
+                <span class="header-badge-equity px-1.5 py-0.2 text-[10px] rounded bg-amber-500/20 text-amber-300 font-mono font-bold ${s.activeTermSheets.length > 0 ? '' : 'hidden'}">${s.activeTermSheets.length}</span>
+              </button>
+              <button class="tab-btn h-8 inline-flex items-center gap-1.5 px-3.5 text-xs font-semibold rounded-lg transition-all whitespace-nowrap cursor-pointer active:scale-[0.98] ${this.activeTab === 'csuite' ? 'active-tab' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent'}" data-tab="csuite" data-active="${this.activeTab === 'csuite'}">
+                ${getIcon('users', 'w-3.5 h-3.5 text-purple-400')}
+                <span>${t('tab_csuite', this.lang)}</span>
+                <span class="header-badge-csuite px-1.5 py-0.2 text-[10px] rounded bg-purple-500/20 text-purple-300 font-mono font-bold">${wfStats.totalHeadcount}</span>
+              </button>
+              <button class="tab-btn h-8 inline-flex items-center gap-1.5 px-3.5 text-xs font-semibold rounded-lg transition-all whitespace-nowrap cursor-pointer active:scale-[0.98] ${this.activeTab === 'rnd' ? 'active-tab' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent'}" data-tab="rnd" data-active="${this.activeTab === 'rnd'}">
+                ${getIcon('cpu', 'w-3.5 h-3.5 text-cyan-400')}
+                <span>${t('tab_rnd', this.lang)}</span>
+                <span class="header-badge-rnd text-[10px] font-mono text-cyan-400">LVL ${s.techLevel}</span>
+              </button>
+            </nav>
+          </div>
+        `;
+      }
+
+      // Attach Header Event Handlers once per DOM build
+      this.attachHeaderEvents(headerEl);
     }
 
-    // Attach Header Event Handlers
+    // Always perform fast in-place sync for all dynamic nodes (0ms lag, zero layout shift)
+    this.syncHeaderDynamicState(headerEl, s, wfStats, pcts, netCashflow, isNetPositive, isControlling);
+  }
+
+  attachHeaderEvents(headerEl) {
     document.getElementById('btn-return-beranda')?.addEventListener('click', () => {
       soundEngine.playKeyboardClick();
       if (this.options.onReturnToBeranda) {
@@ -810,7 +787,7 @@ export class TycoonApp {
 
     document.getElementById('btn-toggle-sound')?.addEventListener('click', () => {
       soundEngine.toggleMute();
-      this.updateHeaderBar(true);
+      this.updateHeaderBar(false);
     });
 
     document.getElementById('btn-toggle-header-collapse')?.addEventListener('click', () => {
@@ -848,10 +825,147 @@ export class TycoonApp {
     });
   }
 
+  syncHeaderDynamicState(headerEl, s, wfStats, pcts, netCashflow, isNetPositive, isControlling) {
+    // 1. Financial Numbers & Date
+    const cashEl = document.getElementById('header-cash');
+    if (cashEl) cashEl.textContent = formatCurrency(s.cash);
+
+    const cashflowEl = document.getElementById('header-cashflow');
+    if (cashflowEl) {
+      cashflowEl.textContent = `${isNetPositive ? '+' : ''}${formatCurrency(netCashflow)}/bln`;
+      cashflowEl.className = `font-bold tabular-nums ${isNetPositive ? 'text-emerald-400' : 'text-rose-400'}`;
+    }
+
+    const valEl = document.getElementById('header-valuation');
+    if (valEl) valEl.textContent = formatCurrency(s.valuation, true);
+
+    const priceEl = document.getElementById('header-share-price');
+    if (priceEl) priceEl.textContent = `$${s.sharePrice.toFixed(2)}`;
+
+    const founderEl = document.getElementById('header-founder-stake');
+    if (founderEl) {
+      founderEl.textContent = `${pcts.founderPct.toFixed(1)}% ${isControlling ? t('hdr_majority', this.lang) : t('hdr_minority', this.lang)}`;
+      founderEl.className = `font-bold tabular-nums ${isControlling ? 'text-emerald-400' : 'text-amber-400'}`;
+    }
+
+    const dateEl = document.getElementById('header-date-text');
+    if (dateEl) {
+      dateEl.textContent = `${String(s.day).padStart(2, '0')}/${String(s.month).padStart(2, '0')}/${s.year}`;
+    }
+
+    // Collapsed Mode Fields
+    const cashColEl = document.getElementById('header-cash-collapsed');
+    if (cashColEl) cashColEl.textContent = formatCurrency(s.cash);
+
+    const cashflowColEl = document.getElementById('header-cashflow-collapsed');
+    if (cashflowColEl) {
+      cashflowColEl.textContent = `${isNetPositive ? '+' : ''}${formatCurrency(netCashflow)}/bln`;
+      cashflowColEl.className = `font-bold tabular-nums ${isNetPositive ? 'text-emerald-400' : 'text-rose-400'}`;
+    }
+
+    const valColEl = document.getElementById('header-val-collapsed');
+    if (valColEl) valColEl.textContent = formatCurrency(s.valuation, true);
+
+    const priceColEl = document.getElementById('header-price-collapsed');
+    if (priceColEl) priceColEl.textContent = `$${s.sharePrice.toFixed(2)}`;
+
+    const founderColEl = document.getElementById('header-founder-collapsed');
+    if (founderColEl) founderColEl.textContent = `${pcts.founderPct.toFixed(1)}%`;
+
+    // Company Name & Ticker
+    const compNameEl = document.getElementById('header-company-name');
+    if (compNameEl) compNameEl.textContent = s.companyName;
+    const compTickerEl = document.getElementById('header-company-ticker');
+    if (compTickerEl) compTickerEl.textContent = s.ticker;
+
+    const compNameColEl = document.getElementById('header-company-name-collapsed');
+    if (compNameColEl) compNameColEl.textContent = s.companyName;
+    const compTickerColEl = document.getElementById('header-company-ticker-collapsed');
+    if (compTickerColEl) compTickerColEl.textContent = s.ticker;
+
+    // 2. Speed Buttons Active Status
+    headerEl.querySelectorAll('.btn-speed').forEach(btn => {
+      const spd = parseInt(btn.getAttribute('data-speed'), 10);
+      const isActive = spd === s.gameSpeed;
+      if (isActive) {
+        btn.className = 'btn-speed h-7 px-2.5 inline-flex items-center justify-center text-xs font-mono font-bold rounded-md transition-all active:scale-95 cursor-pointer bg-amber-500 text-slate-950 shadow-sm';
+      } else {
+        btn.className = 'btn-speed h-7 px-2 inline-flex items-center justify-center text-xs font-mono font-semibold rounded-md transition-all active:scale-95 cursor-pointer text-slate-400 hover:text-white hover:bg-slate-800';
+      }
+    });
+
+    // 3. Audio Mute Button
+    const muteBtn = document.getElementById('btn-toggle-sound');
+    if (muteBtn) {
+      muteBtn.innerHTML = getIcon(soundEngine.isMuted ? 'volumeMute' : 'volume', 'w-4 h-4');
+      muteBtn.title = soundEngine.isMuted ? t('btn_sound_unmute', this.lang) : t('btn_sound_mute', this.lang);
+    }
+
+    // 4. Tab Navigation Buttons & Badges
+    headerEl.querySelectorAll('.tab-btn').forEach(btn => {
+      const tab = btn.getAttribute('data-tab');
+      const isActive = tab === this.activeTab;
+      btn.setAttribute('data-active', isActive ? 'true' : 'false');
+      if (isActive) {
+        btn.classList.add('active-tab');
+        btn.classList.remove('text-slate-400', 'border-transparent');
+      } else {
+        btn.classList.remove('active-tab');
+        btn.classList.add('text-slate-400', 'border-transparent');
+      }
+    });
+
+    // Tab Badges
+    headerEl.querySelectorAll('.header-badge-csuite').forEach(el => {
+      el.textContent = wfStats.totalHeadcount;
+    });
+
+    headerEl.querySelectorAll('.header-badge-equity').forEach(el => {
+      el.textContent = s.activeTermSheets.length;
+      if (s.activeTermSheets.length > 0) {
+        el.classList.remove('hidden');
+      } else {
+        el.classList.add('hidden');
+      }
+    });
+
+    headerEl.querySelectorAll('.header-badge-rnd').forEach(el => {
+      el.textContent = `LVL ${s.techLevel}`;
+    });
+
+    // 5. IPO Slot Sync
+    const ipoSlot = document.getElementById('header-ipo-slot');
+    if (ipoSlot) {
+      if (s.isIpoCompleted) {
+        if (!ipoSlot.querySelector('.text-emerald-400')) {
+          ipoSlot.innerHTML = `
+            <div class="h-8 inline-flex items-center gap-1.5 px-2.5 bg-emerald-950/80 border border-emerald-600/40 text-emerald-400 text-xs font-mono font-bold rounded-lg" title="${t('badge_public_tooltip', this.lang)}">
+              ${getIcon('checkCircle', 'w-3.5 h-3.5')}
+              <span>${t('badge_public', this.lang)}</span>
+            </div>
+          `;
+        }
+      } else {
+        if (!ipoSlot.querySelector('#btn-open-ipo')) {
+          ipoSlot.innerHTML = `
+            <button id="btn-open-ipo" class="h-8 inline-flex items-center gap-1.5 px-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs rounded-lg shadow-sm transition-all active:scale-95 cursor-pointer group" title="${t('btn_ipo_tooltip', this.lang)}">
+              ${getIcon('rocket', 'w-4 h-4 group-hover:scale-110 transition-transform')}
+              <span>${t('btn_ipo', this.lang)}</span>
+            </button>
+          `;
+          document.getElementById('btn-open-ipo')?.addEventListener('click', () => {
+            soundEngine.playKeyboardClick();
+            this.openIpoModal();
+          });
+        }
+      }
+    }
+  }
+
   switchTab(tab) {
     if (this.activeTab === tab) return;
     this.activeTab = tab;
-    this.updateHeaderBar(true);
+    this.updateHeaderBar(false);
     this.renderActiveTab();
   }
 
@@ -2048,344 +2162,7 @@ export class TycoonApp {
 
   // TAB 2: STOCK MARKET & HOSTILE TAKEOVER TERMINAL
   renderStockMarketTab(mainEl) {
-    const s = this.state;
-    const allStocks = [...s.competitorStocks];
-    if (s.isIpoCompleted) {
-      allStocks.unshift({
-        symbol: s.ticker,
-        name: s.companyName,
-        sector: 'Enterprise Software & Conglomerate',
-        price: s.sharePrice,
-        changePct: 2.5,
-        totalShares: s.equity.totalShares,
-        playerOwnedShares: s.equity.founderShares,
-        history: s.sharePriceHistory,
-        marketCap: s.valuation,
-        peRatio: 22.4,
-        dividendYieldPct: 1.5,
-        isCompetitor: false,
-        isAcquiredByPlayer: true,
-        description: 'Perusahaan teknologi yang Anda dirikan dan kendalikan secara mandiri.',
-      });
-    }
-
-    const currentStock = this.getActiveStock();
-    const stakeInfo = checkControllingStake(currentStock.playerOwnedShares, currentStock.totalShares);
-
-    mainEl.innerHTML = `
-      <div class="grid grid-cols-1 lg:grid-cols-12 gap-3.5">
-        <!-- Left: Stock Ticker Selector Strip & Candlestick Chart (8 cols) -->
-        <div class="lg:col-span-8 flex flex-col gap-3.5">
-          <!-- Ticker Selection Strip (Horizontal Scroll for 20 Global Symbols) -->
-          <div class="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-thin">
-            ${allStocks.map(stk => {
-              const isSelected = stk.symbol === this.selectedTicker;
-              const isUp = stk.changePct >= 0;
-              return `
-                <button class="stock-tab-btn flex flex-col p-2 rounded-xl border transition-all text-left cursor-pointer shrink-0 min-w-[125px] ${isSelected ? 'bg-slate-800/95 border-amber-500/80 shadow-md ring-1 ring-amber-500/30' : 'bg-[#0B101D] border-slate-800 hover:border-slate-700'}" data-symbol="${stk.symbol}">
-                  <div class="flex items-center justify-between gap-1">
-                    <span class="font-mono font-bold text-xs ${isSelected ? 'text-amber-400' : 'text-white'}">${stk.symbol}</span>
-                    <span class="stock-btn-change text-[10px] font-mono font-semibold ${isUp ? 'text-emerald-400' : 'text-rose-400'}">
-                      ${isUp ? '+' : ''}${stk.changePct.toFixed(1)}%
-                    </span>
-                  </div>
-                  <div class="stock-btn-price text-xs font-bold font-mono text-white mt-0.5 tabular-nums">$${stk.price.toFixed(2)}</div>
-                  <div class="text-[10px] text-slate-400 truncate mt-0.5 max-w-[105px]">${stk.name}</div>
-                </button>
-              `;
-            }).join('')}
-          </div>
-
-          <!-- Candlestick Chart Container -->
-          <div class="bg-[#0B101D] border border-slate-800 rounded-xl p-3.5 flex flex-col shadow-sm">
-            <div class="flex flex-wrap items-center justify-between gap-3 pb-2.5 mb-2 border-b border-slate-800/80">
-              <div class="flex items-center gap-2.5">
-                <span class="text-sm font-bold font-mono text-white">${currentStock.symbol} · ${currentStock.name}</span>
-                <span class="text-xs px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400 font-mono">${currentStock.sector}</span>
-              </div>
-              <div class="flex items-center gap-3 text-xs font-mono">
-                <div>
-                  <span class="text-slate-400 text-[10px]">CAP: </span>
-                  <span id="stock-chart-header-cap" class="font-bold text-white">${formatCurrency(currentStock.marketCap, true)}</span>
-                </div>
-                <div>
-                  <span class="text-slate-400 text-[10px]">P/E: </span>
-                  <span class="font-bold text-slate-200">${currentStock.peRatio.toFixed(1)}x</span>
-                </div>
-                <div>
-                  <span class="text-slate-400 text-[10px]">DIV: </span>
-                  <span class="font-bold text-emerald-400">${currentStock.dividendYieldPct.toFixed(1)}%</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="relative w-full h-80 rounded-lg overflow-hidden border border-slate-800/60 bg-[#090D16]">
-              <canvas id="stock-chart-canvas" class="w-full h-full block"></canvas>
-            </div>
-
-            <div class="flex items-center justify-between text-[11px] text-slate-400 pt-2 border-t border-slate-800/60 font-mono">
-              <span>SMA 7 Trendline (Cyan) · Volume Histogram (Bawah)</span>
-              <span>Arahkan Kursor untuk Detail Candle (Open/High/Low/Close)</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Right: Order Execution & Hostile Takeover Console (4 cols) -->
-        <div class="lg:col-span-4 flex flex-col gap-3.5">
-          <!-- Buy / Sell Order Terminal -->
-          <div class="bg-[#0B101D] border border-slate-800 rounded-xl p-3.5 shadow-sm flex flex-col">
-            <div class="flex items-center justify-between pb-2.5 mb-2.5 border-b border-slate-800/80">
-              <div class="flex items-center gap-2">
-                ${getIcon('trendingUp', 'w-4 h-4 text-emerald-400')}
-                <span class="text-xs font-bold text-white uppercase tracking-wider">Terminal Order Saham</span>
-              </div>
-              <span class="text-[10px] font-mono text-slate-400">PASAR REGULER</span>
-            </div>
-
-            <!-- Mode Selector: Beli vs Jual with Icons -->
-            <div class="grid grid-cols-2 gap-1 p-1 bg-slate-900 border border-slate-800 rounded-lg mb-3">
-              <button id="btn-trade-buy" class="flex items-center justify-center gap-1.5 py-1.5 text-xs font-bold rounded-md transition-colors cursor-pointer ${this.tradeMode === 'buy' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'}">
-                ${getIcon('trendingUp', 'w-3.5 h-3.5')}
-                <span>Beli</span>
-              </button>
-              <button id="btn-trade-sell" class="flex items-center justify-center gap-1.5 py-1.5 text-xs font-bold rounded-md transition-colors cursor-pointer ${this.tradeMode === 'sell' ? 'bg-rose-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'}">
-                ${getIcon('trendingDown', 'w-3.5 h-3.5')}
-                <span>Jual</span>
-              </button>
-            </div>
-
-            <!-- Shares Input & Quick Buttons -->
-            <div class="space-y-2.5">
-              <div>
-                <label class="block text-[11px] text-slate-400 mb-1 font-mono">Jumlah Lembar Saham</label>
-                <input
-                  id="trade-shares-input"
-                  type="number"
-                  min="100"
-                  step="100"
-                  value="${this.tradeSharesInput}"
-                  class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-amber-500"
-                />
-              </div>
-
-              <!-- Quick % Buttons -->
-              <div class="grid grid-cols-4 gap-1 font-mono text-xs">
-                <button class="btn-quick-pct py-1 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded text-slate-300 transition-colors cursor-pointer" data-pct="0.25">25%</button>
-                <button class="btn-quick-pct py-1 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded text-slate-300 transition-colors cursor-pointer" data-pct="0.50">50%</button>
-                <button class="btn-quick-pct py-1 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded text-slate-300 transition-colors cursor-pointer" data-pct="0.75">75%</button>
-                <button class="btn-quick-pct py-1 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded text-slate-300 transition-colors cursor-pointer" data-pct="1.00">Maks</button>
-              </div>
-
-              <!-- Calculated Total -->
-              <div class="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800/80 space-y-1 text-xs font-mono">
-                <div class="flex justify-between text-slate-400">
-                  <span>Harga per Lembar:</span>
-                  <span id="trade-live-unit-price" class="text-white">$${currentStock.price.toFixed(2)}</span>
-                </div>
-                <div class="flex justify-between text-slate-400">
-                  <span>Estimasi Total:</span>
-                  <span id="trade-total-cost" class="font-bold text-amber-400">${formatCurrency(this.tradeSharesInput * currentStock.price)}</span>
-                </div>
-                <div class="flex justify-between text-slate-400 pt-1 border-t border-slate-800">
-                  <span>Kas Tersedia:</span>
-                  <span class="text-emerald-400 font-bold">${formatCurrency(s.cash)}</span>
-                </div>
-              </div>
-
-              <!-- Execute Order Button -->
-              <button id="btn-execute-trade" class="w-full py-2 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-md ${this.tradeMode === 'buy' ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-rose-600 hover:bg-rose-500 text-white'}">
-                ${this.tradeMode === 'buy' ? `Konfirmasi Beli ${formatNumber(this.tradeSharesInput)} Saham` : `Konfirmasi Jual ${formatNumber(this.tradeSharesInput)} Saham`}
-              </button>
-            </div>
-          </div>
-
-          <!-- Hostile Takeover & Majority Control Section -->
-          <div class="bg-[#0B101D] border border-slate-800 rounded-xl p-3.5 shadow-sm flex flex-col">
-            <div class="flex items-center justify-between pb-2 mb-2 border-b border-slate-800/80">
-              <div class="flex items-center gap-2">
-                ${getIcon('crown', 'w-4 h-4 text-amber-400')}
-                <span class="text-xs font-bold text-white uppercase tracking-wider">Status Akuisisi Korporat</span>
-              </div>
-              <span class="text-[10px] font-mono ${stakeInfo.hasControllingStake ? 'text-emerald-400' : 'text-slate-400'}">
-                ${stakeInfo.ownershipPct.toFixed(2)}% DIMILIKI
-              </span>
-            </div>
-
-            <div class="space-y-2.5 text-xs">
-              <!-- Progress Bar -->
-              <div>
-                <div class="flex justify-between text-[11px] text-slate-400 mb-1 font-mono">
-                  <span>Ambang Kontrol Mayoritas (50%)</span>
-                  <span>${stakeInfo.ownershipPct.toFixed(1)}% / 100%</span>
-                </div>
-                <div class="w-full h-2.5 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
-                  <div class="h-full transition-all duration-500 ${stakeInfo.hasControllingStake ? 'bg-gradient-to-r from-amber-500 to-emerald-500' : 'bg-blue-500'}" style="width: ${Math.min(100, stakeInfo.ownershipPct)}%"></div>
-                </div>
-              </div>
-
-              <!-- Actions based on ownership stake -->
-              ${currentStock.isCompetitor ? `
-                ${stakeInfo.hasControllingStake ? `
-                  <div class="p-3 bg-amber-950/30 border border-amber-600/40 rounded-lg space-y-2">
-                    <div class="flex items-center gap-1.5 text-amber-400 font-semibold text-xs">
-                      ${getIcon('checkCircle', 'w-3.5 h-3.5')}
-                      <span>KENDALI MAYORITAS DIRAIH!</span>
-                    </div>
-                    <p class="text-[11px] text-slate-300">
-                      Anda menguasai ${stakeInfo.ownershipPct.toFixed(1)}% saham emiten ${currentStock.symbol}. Anda dapat mengekstrak dividen kontrol khusus.
-                    </p>
-                    <button id="btn-takeover-dividend" class="w-full py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-lg transition-colors cursor-pointer">
-                      Ekstrak Dividen Kontrol ($150,000 Kas)
-                    </button>
-                    ${stakeInfo.canMerge ? `
-                      <button id="btn-force-merger" class="w-full py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer">
-                        Eksekusi Merger Konglomerasi (Supermajority)
-                      </button>
-                    ` : ''}
-                  </div>
-                ` : `
-                  <p class="text-[11px] text-slate-400 leading-relaxed">
-                    Kumpulkan >50% lembar saham emiten ini di pasar modal untuk memicu Hostile Takeover dan mengendalikan dewan komisaris lawan.
-                  </p>
-                `}
-              ` : `
-                <p class="text-[11px] text-slate-400 leading-relaxed">
-                  Ini adalah saham induk perusahaan Anda sendiri (${s.ticker}). Jaga kepemilikan di atas 50% agar dewan investor eksternal tidak dapat menggulingkan Anda.
-                </p>
-              `}
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
-
-    // Init Stock Canvas Chart
-    const canvas = document.getElementById('stock-chart-canvas');
-    if (canvas) {
-      this.stockChart = new StockCanvasChart(canvas);
-      this.stockChart.resize();
-      this.stockChart.setData(currentStock.symbol, currentStock.history);
-    }
-
-    // Ticker select handlers
-    mainEl.querySelectorAll('.stock-tab-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const sym = e.currentTarget.getAttribute('data-symbol');
-        this.selectedTicker = sym;
-        soundEngine.playKeyboardClick();
-        this.renderStockMarketTab(mainEl);
-      });
-    });
-
-    // Trade mode toggles
-    document.getElementById('btn-trade-buy')?.addEventListener('click', () => {
-      this.tradeMode = 'buy';
-      this.renderStockMarketTab(mainEl);
-    });
-    document.getElementById('btn-trade-sell')?.addEventListener('click', () => {
-      this.tradeMode = 'sell';
-      this.renderStockMarketTab(mainEl);
-    });
-
-    // Trade shares input change
-    const sharesInput = document.getElementById('trade-shares-input');
-    sharesInput?.addEventListener('input', (e) => {
-      const val = parseInt(e.target.value, 10) || 0;
-      this.tradeSharesInput = Math.max(0, val);
-      const costEl = document.getElementById('trade-total-cost');
-      if (costEl) {
-        costEl.textContent = formatCurrency(this.tradeSharesInput * currentStock.price);
-      }
-    });
-
-    // Quick % buttons
-    mainEl.querySelectorAll('.btn-quick-pct').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const pct = parseFloat(e.currentTarget.getAttribute('data-pct'));
-        if (this.tradeMode === 'buy') {
-          const maxAffordable = Math.floor(s.cash / currentStock.price);
-          this.tradeSharesInput = Math.max(100, Math.floor(maxAffordable * pct));
-        } else {
-          this.tradeSharesInput = Math.max(0, Math.floor(currentStock.playerOwnedShares * pct));
-        }
-        if (sharesInput) sharesInput.value = this.tradeSharesInput;
-        const costEl = document.getElementById('trade-total-cost');
-        if (costEl) costEl.textContent = formatCurrency(this.tradeSharesInput * currentStock.price);
-      });
-    });
-
-    // Execute Trade button
-    document.getElementById('btn-execute-trade')?.addEventListener('click', () => {
-      if (this.tradeMode === 'buy') {
-        const res = executeStockBuy(s.cash, currentStock, this.tradeSharesInput);
-        if (!res.success) {
-          soundEngine.playAlertTone();
-          alert(res.errorMessage || 'Pembelian gagal');
-          return;
-        }
-        s.cash = res.newPlayerCash;
-        currentStock.playerOwnedShares = res.newPlayerShares;
-        soundEngine.playCashChime();
-        this.addChatMessage({
-          sender: 'Bursa Efek Global',
-          role: 'Order Execution',
-          icon: 'trendingUp',
-          text: `Pembelian ekuitas berhasil! Membeli ${formatNumber(this.tradeSharesInput)} lembar ${currentStock.symbol} senilai ${formatCurrency(res.totalCost)}.`,
-          tag: 'market',
-        });
-      } else {
-        const res = executeStockSell(s.cash, currentStock, this.tradeSharesInput);
-        if (!res.success) {
-          soundEngine.playAlertTone();
-          alert(res.errorMessage || 'Penjualan gagal');
-          return;
-        }
-        s.cash = res.newPlayerCash;
-        currentStock.playerOwnedShares = res.newPlayerShares;
-        soundEngine.playCashChime();
-        this.addChatMessage({
-          sender: 'Bursa Efek Global',
-          role: 'Order Execution',
-          icon: 'trendingDown',
-          text: `Penjualan saham tereksekusi! Menjual ${formatNumber(this.tradeSharesInput)} lembar ${currentStock.symbol} dan menerima dana segar ${formatCurrency(res.totalProceeds)}.`,
-          tag: 'market',
-        });
-      }
-      this.updateHeaderBar();
-      this.renderStockMarketTab(mainEl);
-    });
-
-    // Takeover Dividend Button
-    document.getElementById('btn-takeover-dividend')?.addEventListener('click', () => {
-      soundEngine.playCashChime();
-      s.cash += 150000;
-      this.addChatMessage({
-        sender: 'Departemen M&A',
-        role: 'Hostile Takeover',
-        icon: 'crown',
-        text: `Sukses mengekstrak dividen kontrol mayoritas $150,000 dari emiten ${currentStock.symbol}!`,
-        tag: 'market',
-      });
-      this.updateHeaderBar();
-      this.renderStockMarketTab(mainEl);
-    });
-
-    // Force Merger Button
-    document.getElementById('btn-force-merger')?.addEventListener('click', () => {
-      soundEngine.playFanfare();
-      currentStock.isAcquiredByPlayer = true;
-      s.monthlyRevenue += 18000;
-      s.reputation = Math.min(100, s.reputation + 20);
-      this.addChatMessage({
-        sender: 'Departemen M&A & Konsolidasi',
-        role: 'Corporate Merger',
-        icon: 'crown',
-        text: `KONSOLIDASI SUKSES! Emiten ${currentStock.symbol} resmi diakuisisi penuh ke dalam konglomerasi induk. Arus kas dividen bulanan bertambah +$18,000/bln!`,
-        tag: 'finance',
-      });
-      this.updateHeaderBar();
-      this.renderStockMarketTab(mainEl);
-    });
+    renderStockMarketView(this, mainEl);
   }
 
   // ==========================================
@@ -3135,47 +2912,7 @@ export class TycoonApp {
    * Ultra-lightweight live ticker updater for the Stocks tab.
    */
   updateStockTabLiveTicks() {
-    const s = this.state;
-    const currentStock = this.getActiveStock();
-    const allStocks = [
-      {
-        symbol: s.ticker,
-        price: s.sharePrice,
-        changePct: (s.sharePriceHistory.length > 1)
-          ? Math.round(((s.sharePrice - s.sharePriceHistory[0].open) / s.sharePriceHistory[0].open) * 1000) / 10
-          : 0,
-        marketCap: s.valuation,
-      },
-      ...s.competitorStocks,
-    ];
-
-    const btns = document.querySelectorAll('.stock-tab-btn[data-symbol]');
-    btns.forEach(btn => {
-      const sym = btn.getAttribute('data-symbol');
-      const stk = allStocks.find(item => item.symbol === sym);
-      if (!stk) return;
-
-      const isUp = stk.changePct >= 0;
-      const changeEl = btn.querySelector('.stock-btn-change');
-      if (changeEl) {
-        changeEl.textContent = `${isUp ? '+' : ''}${stk.changePct.toFixed(1)}%`;
-        changeEl.className = `stock-btn-change text-[10px] font-mono font-semibold ${isUp ? 'text-emerald-400' : 'text-rose-400'}`;
-      }
-
-      const priceEl = btn.querySelector('.stock-btn-price');
-      if (priceEl) {
-        priceEl.textContent = `$${stk.price.toFixed(2)}`;
-      }
-    });
-
-    const capEl = document.getElementById('stock-chart-header-cap');
-    if (capEl) capEl.textContent = formatCurrency(currentStock.marketCap, true);
-
-    const unitPriceEl = document.getElementById('trade-live-unit-price');
-    if (unitPriceEl) unitPriceEl.textContent = `$${currentStock.price.toFixed(2)}`;
-
-    const costEl = document.getElementById('trade-total-cost');
-    if (costEl) costEl.textContent = formatCurrency(this.tradeSharesInput * currentStock.price);
+    updateStockMarketViewTicks(this);
   }
 
   // ==========================================
@@ -3825,591 +3562,7 @@ export class TycoonApp {
 
   // TAB 4: WORKFORCE & CORPORATE PERSONNEL HIERARCHY (4 TIERS)
   renderCSuiteTab(mainEl) {
-    const s = this.state;
-    if (!s.workforce) {
-      s.workforce = JSON.parse(JSON.stringify(DEFAULT_WORKFORCE));
-    }
-    const wfStats = calculateWorkforceStats(s.workforce, s.executives);
-    const execBonuses = calculateCSuiteBonuses(s.executives);
-
-    mainEl.innerHTML = `
-      <div class="space-y-4">
-        <!-- Top KPI Summary Header Bar -->
-        <div class="bg-[#0B101D] border border-slate-800 rounded-lg p-3 shadow-sm">
-          <div class="flex flex-wrap items-center justify-between gap-2 pb-2.5 mb-2.5 border-b border-slate-800/80">
-            <div class="flex items-center gap-2">
-              ${getIcon('users', 'w-4 h-4 text-purple-400')}
-              <div>
-                <span class="text-xs font-bold text-white uppercase tracking-wider">${t('wf_title', this.lang)}</span>
-                <span class="text-[11px] text-slate-400 font-mono ml-2 hidden sm:inline">• ${t('wf_sub', this.lang)}</span>
-              </div>
-            </div>
-            <div class="flex items-center gap-2 text-[11px] font-mono text-slate-400">
-              <span class="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-purple-500/10 border border-purple-500/20 text-purple-300 font-bold">
-                ${getIcon('layers', 'w-3 h-3')} 4 Tingkat Hierarki
-              </span>
-            </div>
-          </div>
-
-          <!-- 4 Global Workforce KPIs -->
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-2.5 text-xs">
-            <div class="bg-slate-900/90 border border-purple-500/25 rounded-md p-2.5 flex items-center justify-between">
-              <div>
-                <span class="text-[10px] text-slate-400 font-mono block">${t('wf_kpi_headcount', this.lang)}</span>
-                <span class="text-base font-bold text-white font-mono">${wfStats.totalHeadcount} <span class="text-xs font-normal text-slate-400">Jiwa</span></span>
-              </div>
-              <div class="p-2 rounded-md bg-purple-950/40 text-purple-400">
-                ${getIcon('users', 'w-4 h-4')}
-              </div>
-            </div>
-
-            <div class="bg-slate-900/90 border border-amber-500/25 rounded-md p-2.5 flex items-center justify-between">
-              <div>
-                <span class="text-[10px] text-slate-400 font-mono block">${t('wf_kpi_payroll', this.lang)}</span>
-                <span class="text-base font-bold text-amber-400 font-mono">${formatCurrency(wfStats.totalPayroll)}<span class="text-xs font-normal text-slate-400">/bln</span></span>
-              </div>
-              <div class="p-2 rounded-md bg-amber-950/40 text-amber-400">
-                ${getIcon('coins', 'w-4 h-4')}
-              </div>
-            </div>
-
-            <div class="bg-slate-900/90 border border-emerald-500/25 rounded-md p-2.5 flex items-center justify-between">
-              <div>
-                <span class="text-[10px] text-slate-400 font-mono block">${t('wf_kpi_morale', this.lang)}</span>
-                <span class="text-base font-bold text-emerald-400 font-mono">${wfStats.averageMorale}% <span class="text-xs font-normal text-emerald-500/80">${wfStats.averageMorale >= 80 ? 'Optimal' : (wfStats.averageMorale >= 65 ? 'Stabil' : 'Rendah')}</span></span>
-              </div>
-              <div class="p-2 rounded-md bg-emerald-950/40 text-emerald-400">
-                ${getIcon('heart', 'w-4 h-4')}
-              </div>
-            </div>
-
-            <div class="bg-slate-900/90 border border-cyan-500/25 rounded-md p-2.5 flex items-center justify-between">
-              <div>
-                <span class="text-[10px] text-slate-400 font-mono block">${t('wf_kpi_recruiting', this.lang)}</span>
-                <span class="text-base font-bold text-cyan-400 font-mono">${wfStats.openRecruitingCount} <span class="text-xs font-normal text-slate-400">Posisi</span></span>
-              </div>
-              <div class="p-2 rounded-md bg-cyan-950/40 text-cyan-400">
-                ${getIcon('userPlus', 'w-4 h-4')}
-              </div>
-            </div>
-          </div>
-
-          <!-- Bottom Aggregated Synergy Ribbon -->
-          <div class="mt-2.5 pt-2 border-t border-slate-800/60 flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-slate-400">
-            <div class="flex flex-wrap items-center gap-3">
-              <span class="text-slate-300 font-semibold">Sinergi Output Korporat:</span>
-              <span class="text-cyan-400 font-bold">+${wfStats.totalTechBonus} Tech Points/bln</span>
-              <span class="text-slate-700">|</span>
-              <span class="text-amber-400 font-bold">+${(wfStats.totalRevenueMultiplierBonus * 100).toFixed(1)}% Revenue Margin</span>
-              <span class="text-slate-700">|</span>
-              <span class="text-emerald-400 font-bold">-${wfStats.totalExpenseReductionPct}% Reduksi Beban</span>
-            </div>
-            <span class="text-[10px] text-slate-500">Otomasi Simulasi Payroll Real-time</span>
-          </div>
-        </div>
-
-        <!-- ========================================== -->
-        <!-- TINGKAT 1: DEWAN DIREKSI & C-SUITE (5 Kursi) -->
-        <!-- ========================================== -->
-        <div class="bg-[#0E1322] border border-amber-500/30 rounded-lg p-3.5 shadow-sm">
-          <div class="flex flex-wrap items-center justify-between gap-2 pb-2.5 mb-2.5 border-b border-amber-500/20">
-            <div class="flex items-center gap-2">
-              <span class="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-bold font-mono uppercase tracking-wider">
-                ${t('wf_tier_1', this.lang)}
-              </span>
-              <span class="text-xs text-slate-300 font-medium">${t('wf_tier_1_sub', this.lang)}</span>
-            </div>
-            <div class="text-[11px] font-mono text-amber-400/90 font-bold">
-              Kasta Tertinggi • Penentu Arah Bisnis
-            </div>
-          </div>
-
-          <!-- 5 Executive Seats Grid -->
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-            ${['CEO', 'CTO', 'CFO', 'CMO', 'COO'].map(role => {
-              const exec = s.executives[role];
-              const roleMeta = EXECUTIVE_ROLES[role];
-              return `
-                <div class="bg-slate-900/90 border ${exec ? 'border-amber-500/30' : 'border-dashed border-slate-800'} rounded-lg p-3 flex flex-col justify-between gap-2.5 min-h-[220px]">
-                  <div>
-                    <div class="flex items-center justify-between mb-1.5">
-                      <div class="flex items-center gap-1.5">
-                        <span class="text-xs font-mono font-bold ${roleMeta.color}">${role}</span>
-                        <span class="text-[10px] text-slate-400">(${roleMeta.title})</span>
-                      </div>
-                      <div class="flex items-center gap-1">
-                        ${getIcon(roleMeta.icon, `w-4 h-4 ${roleMeta.color}`)}
-                        ${exec && !exec.isPlayer ? `
-                          <button class="btn-fire-exec p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-md transition-colors cursor-pointer" data-role="${role}" title="${t('wf_fire_btn', this.lang)} ${role}">
-                            ${getIcon('trash', 'w-3 h-3')}
-                          </button>
-                        ` : ''}
-                      </div>
-                    </div>
-
-                    ${exec ? `
-                      <div class="space-y-1.5">
-                        <div class="font-bold text-white text-xs truncate">${exec.name}</div>
-                        <div class="text-[11px] text-amber-400/90 font-mono font-semibold">${formatCurrency(exec.salaryMonthly)}/bln</div>
-                        <div class="space-y-1 pt-1.5 border-t border-slate-800 text-[10px] font-mono">
-                          <div class="flex justify-between">
-                            <span class="text-slate-500">Keahlian:</span>
-                            <span class="text-cyan-400 font-bold">${exec.specialty}/100</span>
-                          </div>
-                          <div class="flex justify-between">
-                            <span class="text-slate-500">Kepemimpinan:</span>
-                            <span class="text-amber-400 font-bold">${exec.leadership}/100</span>
-                          </div>
-                          <div class="flex justify-between">
-                            <span class="text-slate-500">Moral:</span>
-                            <span class="text-emerald-400 font-bold">${exec.morale}%</span>
-                          </div>
-                        </div>
-                        <div class="mt-2 pt-1 border-t border-slate-800/80">
-                          <span class="text-[10px] font-semibold text-amber-300 block truncate">${exec.trait}</span>
-                          <span class="text-[10px] text-slate-400 leading-tight block line-clamp-2">${exec.traitDescription}</span>
-                        </div>
-                      </div>
-                    ` : `
-                      <div class="py-10 text-center text-slate-500 text-xs">
-                        <div class="p-2 rounded-full bg-slate-800/50 w-8 h-8 mx-auto mb-2 flex items-center justify-center text-slate-400">
-                          ${getIcon('userPlus', 'w-4 h-4')}
-                        </div>
-                        Kursi ${role} Kosong.<br>
-                        <span class="text-[10px] text-cyan-400 font-medium">Pilih dari bursa kandidat di bawah</span>
-                      </div>
-                    `}
-                  </div>
-
-                  <div class="pt-2 border-t border-slate-800/60">
-                    <span class="text-[10px] font-mono block text-center ${exec ? 'text-emerald-400 font-semibold' : 'text-slate-500'}">
-                      ${exec ? (exec.isPlayer ? '• KEPALA UTAMA •' : '• AKTIF MENJABAT •') : '• REKRUTMEN TERBUKA •'}
-                    </span>
-                  </div>
-                </div>
-              `;
-            }).join('')}
-          </div>
-
-          <!-- Headhunter Executive Candidate Market Sub-Panel -->
-          <div class="mt-3.5 pt-3 border-t border-amber-500/20">
-            <div class="flex items-center justify-between mb-2.5">
-              <div class="flex items-center gap-2">
-                ${getIcon('search', 'w-3.5 h-3.5 text-cyan-400')}
-                <span class="text-xs font-bold text-white uppercase tracking-wider">Bursa Kandidat Eksekutif (Headhunter Talent Pool)</span>
-              </div>
-              <span class="text-[10px] font-mono text-slate-400">6 KANDIDAT DIREKSI TERVERIFIKASI</span>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
-              ${s.candidatePool.map(cand => {
-                const roleMeta = EXECUTIVE_ROLES[cand.role];
-                const isHired = s.executives[cand.role] !== null;
-                return `
-                  <div class="bg-slate-900/70 border border-slate-800/90 rounded-lg p-2.5 flex flex-col justify-between gap-2 text-xs">
-                    <div>
-                      <div class="flex items-center justify-between mb-1">
-                        <span class="font-bold text-white text-xs truncate">${cand.name}</span>
-                        <span class="text-[10px] font-mono px-2 py-0.5 rounded-md bg-slate-800 text-cyan-400 font-bold">${cand.role}</span>
-                      </div>
-                      <span class="text-[11px] text-amber-400 font-semibold block">${cand.trait}</span>
-                      <p class="text-[10px] text-slate-400 my-1 leading-relaxed">${cand.traitDescription}</p>
-
-                      <div class="grid grid-cols-2 gap-1.5 mt-1.5 pt-1.5 border-t border-slate-800/80 font-mono text-[10px]">
-                        <div>
-                          <span class="text-slate-500 block">Gaji:</span>
-                          <span class="text-white font-bold">${formatCurrency(cand.salaryMonthly)}/bln</span>
-                        </div>
-                        <div>
-                          <span class="text-slate-500 block">Saham ESOP:</span>
-                          <span class="text-amber-400 font-bold">${cand.equityGrantedPct.toFixed(1)}%</span>
-                        </div>
-                        <div>
-                          <span class="text-slate-500 block">Keahlian:</span>
-                          <span class="text-cyan-400 font-bold">${cand.specialty}/100</span>
-                        </div>
-                        <div>
-                          <span class="text-slate-500 block">Pimpinan:</span>
-                          <span class="text-purple-400 font-bold">${cand.leadership}/100</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <button class="btn-hire-cand flex items-center justify-center gap-1.5 w-full py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${isHired ? 'bg-slate-800/80 text-slate-500 cursor-not-allowed' : 'bg-cyan-600 hover:bg-cyan-500 text-white shadow-sm active:scale-95'}" data-id="${cand.id}" ${isHired ? 'disabled' : ''}>
-                      ${getIcon('userPlus', 'w-3 h-3')}
-                      <span>${isHired ? `Kursi ${cand.role} Terisi` : `Rekrut Sebagai ${cand.role}`}</span>
-                    </button>
-                  </div>
-                `;
-              }).join('')}
-            </div>
-          </div>
-        </div>
-
-        <!-- ==================================================== -->
-        <!-- TINGKAT 2: KEPALA DIVISI & DIREKTUR BIDANG (5 Divisi) -->
-        <!-- ==================================================== -->
-        <div class="bg-[#0D152A] border border-indigo-500/30 rounded-lg p-3.5 shadow-sm">
-          <div class="flex flex-wrap items-center justify-between gap-2 pb-2.5 mb-2.5 border-b border-indigo-500/20">
-            <div class="flex items-center gap-2">
-              <span class="px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 text-[10px] font-bold font-mono uppercase tracking-wider">
-                ${t('wf_tier_2', this.lang)}
-              </span>
-              <span class="text-xs text-slate-300 font-medium">${t('wf_tier_2_sub', this.lang)}</span>
-            </div>
-            <div class="text-[11px] font-mono text-indigo-300 font-bold">
-              Manajemen Menengah • Tata Kelola Unit
-            </div>
-          </div>
-
-          <!-- 5 Division Heads Grid -->
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
-            ${s.workforce.managers.map(mgr => {
-              const currentRate = mgr.salaryRates[mgr.salaryTier] || mgr.salaryRates.market;
-              const subtotalMonthly = mgr.count * currentRate;
-              return `
-                <div class="bg-[#101932] border border-indigo-500/20 rounded-lg p-3 flex flex-col justify-between gap-3 text-xs">
-                  <div>
-                    <!-- Header with Icon & Department -->
-                    <div class="flex items-center justify-between mb-1.5">
-                      <span class="text-[10px] font-mono px-2 py-0.5 rounded-md ${mgr.badgeBg} font-bold">${mgr.department}</span>
-                      ${getIcon(mgr.icon, `w-4 h-4 ${mgr.color}`)}
-                    </div>
-
-                    <div class="font-bold text-white text-xs mb-1">${mgr.title}</div>
-                    <div class="text-[10px] text-slate-400 mb-2 leading-tight">${mgr.bonusDesc}</div>
-
-                    <!-- Config 1: Quota / Jumlah -->
-                    <div class="bg-slate-950/60 border border-slate-800/80 rounded-md p-2 mb-2">
-                      <div class="flex items-center justify-between text-[10px] text-slate-400 font-mono mb-1">
-                        <span>${t('wf_quota', this.lang)}:</span>
-                        <span class="text-white font-bold font-mono">${mgr.count} / ${mgr.maxCount} Direktur</span>
-                      </div>
-                      <div class="flex items-center gap-1.5">
-                        <button class="btn-adjust-quota flex-1 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-colors cursor-pointer disabled:opacity-40" data-tier="managers" data-id="${mgr.id}" data-delta="-1" ${mgr.count <= 0 ? 'disabled' : ''}>
-                          -1
-                        </button>
-                        <button class="btn-adjust-quota flex-1 py-1 rounded-md bg-indigo-600/80 hover:bg-indigo-600 text-white text-xs font-bold transition-colors cursor-pointer disabled:opacity-40" data-tier="managers" data-id="${mgr.id}" data-delta="1" ${mgr.count >= mgr.maxCount ? 'disabled' : ''}>
-                          +1
-                        </button>
-                      </div>
-                    </div>
-
-                    <!-- Config 2: Salary Tier Selection -->
-                    <div class="bg-slate-950/60 border border-slate-800/80 rounded-md p-2 mb-2">
-                      <div class="flex items-center justify-between text-[10px] text-slate-400 font-mono mb-1">
-                        <span>${t('wf_salary_tier', this.lang)}:</span>
-                        <span class="text-indigo-400 font-bold">${formatCurrency(currentRate)}/bln</span>
-                      </div>
-                      <div class="grid grid-cols-3 gap-1">
-                        ${['budget', 'market', 'elite'].map(tierKey => `
-                          <button class="btn-set-salary py-1 px-1 rounded-md text-[10px] font-mono font-semibold transition-all cursor-pointer ${mgr.salaryTier === tierKey ? 'bg-indigo-600 text-white font-bold shadow-sm' : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-800'}" data-tier="managers" data-id="${mgr.id}" data-tier-val="${tierKey}" title="${formatCurrency(mgr.salaryRates[tierKey])}/bln">
-                            ${tierKey === 'budget' ? t('wf_budget', this.lang) : (tierKey === 'market' ? t('wf_market', this.lang) : t('wf_elite', this.lang))}
-                          </button>
-                        `).join('')}
-                      </div>
-                    </div>
-
-                    <!-- Config 3: Open/Closed Recruitment Status Toggle -->
-                    <div class="flex items-center justify-between bg-slate-950/60 border border-slate-800/80 rounded-md p-2">
-                      <span class="text-[10px] text-slate-400 font-mono">${t('wf_recruitment', this.lang)}:</span>
-                      <button class="btn-toggle-recruiting inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-bold font-mono transition-all cursor-pointer ${mgr.isRecruiting ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30' : 'bg-slate-800 text-slate-400 border border-slate-700 hover:text-white'}" data-tier="managers" data-id="${mgr.id}">
-                        ${mgr.isRecruiting ? getIcon('check', 'w-3 h-3 text-emerald-400') : getIcon('x', 'w-3 h-3 text-slate-400')}
-                        <span>${mgr.isRecruiting ? t('wf_open', this.lang) : t('wf_closed', this.lang)}</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  <!-- Subtotal summary -->
-                  <div class="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[10px] font-mono text-slate-400">
-                    <span>Beban Bulanan:</span>
-                    <span class="font-bold text-amber-400">${formatCurrency(subtotalMonthly)}/bln</span>
-                  </div>
-                </div>
-              `;
-            }).join('')}
-          </div>
-        </div>
-
-        <!-- ============================================== -->
-        <!-- TINGKAT 3: KARYAWAN SENIOR & TENAGA AHLI       -->
-        <!-- ============================================== -->
-        <div class="bg-[#091823] border border-teal-500/30 rounded-lg p-3.5 shadow-sm">
-          <div class="flex flex-wrap items-center justify-between gap-2 pb-2.5 mb-2.5 border-b border-teal-500/20">
-            <div class="flex items-center gap-2">
-              <span class="px-2 py-0.5 rounded-md bg-teal-500/20 text-teal-300 border border-teal-500/40 text-[10px] font-bold font-mono uppercase tracking-wider">
-                ${t('wf_tier_3', this.lang)}
-              </span>
-              <span class="text-xs text-slate-300 font-medium">${t('wf_tier_3_sub', this.lang)}</span>
-            </div>
-            <div class="text-[11px] font-mono text-teal-300 font-bold">
-              Tenaga Spesialis • Motor Produksi & Inovasi
-            </div>
-          </div>
-
-          <!-- 4 Senior Branches Grid -->
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-            ${s.workforce.seniors.map(snr => {
-              const currentRate = snr.salaryRates[snr.salaryTier] || snr.salaryRates.market;
-              const subtotalMonthly = snr.count * currentRate;
-              return `
-                <div class="bg-[#0b1f2e] border border-teal-500/20 rounded-lg p-3 flex flex-col justify-between gap-3 text-xs">
-                  <div>
-                    <!-- Header with Icon & Branch -->
-                    <div class="flex items-center justify-between mb-1.5">
-                      <span class="text-[10px] font-mono px-2 py-0.5 rounded-md ${snr.badgeBg} font-bold">${snr.branch}</span>
-                      ${getIcon(snr.icon, `w-4 h-4 ${snr.color}`)}
-                    </div>
-
-                    <div class="font-bold text-white text-xs mb-1">${snr.title}</div>
-                    <div class="text-[10px] text-slate-400 mb-2 leading-tight">${snr.bonusDesc}</div>
-
-                    <!-- Config 1: Quota / Jumlah Buttons -->
-                    <div class="bg-slate-950/60 border border-slate-800/80 rounded-md p-2 mb-2">
-                      <div class="flex items-center justify-between text-[10px] text-slate-400 font-mono mb-1">
-                        <span>${t('wf_quota', this.lang)}:</span>
-                        <span class="text-white font-bold font-mono">${snr.count} <span class="text-slate-400 font-normal">/ ${snr.maxCount} Ahli</span></span>
-                      </div>
-                      <div class="flex items-center gap-1">
-                        <button class="btn-adjust-quota flex-1 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-colors cursor-pointer disabled:opacity-40" data-tier="seniors" data-id="${snr.id}" data-delta="-1" ${snr.count <= 0 ? 'disabled' : ''}>
-                          -1
-                        </button>
-                        <button class="btn-adjust-quota flex-1 py-1 rounded-md bg-teal-600/80 hover:bg-teal-600 text-white text-xs font-bold transition-colors cursor-pointer disabled:opacity-40" data-tier="seniors" data-id="${snr.id}" data-delta="1" ${snr.count >= snr.maxCount ? 'disabled' : ''}>
-                          +1
-                        </button>
-                        <button class="btn-adjust-quota flex-1 py-1 rounded-md bg-teal-700/80 hover:bg-teal-600 text-white text-xs font-bold transition-colors cursor-pointer disabled:opacity-40" data-tier="seniors" data-id="${snr.id}" data-delta="5" ${snr.count + 5 > snr.maxCount ? 'disabled' : ''}>
-                          +5
-                        </button>
-                      </div>
-                    </div>
-
-                    <!-- Config 2: Salary Tier Selection -->
-                    <div class="bg-slate-950/60 border border-slate-800/80 rounded-md p-2 mb-2">
-                      <div class="flex items-center justify-between text-[10px] text-slate-400 font-mono mb-1">
-                        <span>${t('wf_salary_tier', this.lang)}:</span>
-                        <span class="text-teal-400 font-bold">${formatCurrency(currentRate)}/bln</span>
-                      </div>
-                      <div class="grid grid-cols-3 gap-1">
-                        ${['budget', 'market', 'elite'].map(tierKey => `
-                          <button class="btn-set-salary py-1 px-1 rounded-md text-[10px] font-mono font-semibold transition-all cursor-pointer ${snr.salaryTier === tierKey ? 'bg-teal-600 text-white font-bold shadow-sm' : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-800'}" data-tier="seniors" data-id="${snr.id}" data-tier-val="${tierKey}" title="${formatCurrency(snr.salaryRates[tierKey])}/bln">
-                            ${tierKey === 'budget' ? t('wf_budget', this.lang) : (tierKey === 'market' ? t('wf_market', this.lang) : t('wf_elite', this.lang))}
-                          </button>
-                        `).join('')}
-                      </div>
-                    </div>
-
-                    <!-- Config 3: Open/Closed Recruitment Status Toggle -->
-                    <div class="flex items-center justify-between bg-slate-950/60 border border-slate-800/80 rounded-md p-2">
-                      <span class="text-[10px] text-slate-400 font-mono">${t('wf_recruitment', this.lang)}:</span>
-                      <button class="btn-toggle-recruiting inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-bold font-mono transition-all cursor-pointer ${snr.isRecruiting ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30' : 'bg-slate-800 text-slate-400 border border-slate-700 hover:text-white'}" data-tier="seniors" data-id="${snr.id}">
-                        ${snr.isRecruiting ? getIcon('check', 'w-3 h-3 text-emerald-400') : getIcon('x', 'w-3 h-3 text-slate-400')}
-                        <span>${snr.isRecruiting ? t('wf_open', this.lang) : t('wf_closed', this.lang)}</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  <!-- Subtotal summary -->
-                  <div class="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[10px] font-mono text-slate-400">
-                    <span>Beban Bulanan:</span>
-                    <span class="font-bold text-amber-400">${formatCurrency(subtotalMonthly)}/bln</span>
-                  </div>
-                </div>
-              `;
-            }).join('')}
-          </div>
-        </div>
-
-        <!-- ============================================== -->
-        <!-- TINGKAT 4: KARYAWAN JUNIOR & STAF PELAKSANA    -->
-        <!-- ============================================== -->
-        <div class="bg-[#0A1A18] border border-emerald-500/30 rounded-lg p-3.5 shadow-sm">
-          <div class="flex flex-wrap items-center justify-between gap-2 pb-2.5 mb-2.5 border-b border-emerald-500/20">
-            <div class="flex items-center gap-2">
-              <span class="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold font-mono uppercase tracking-wider">
-                ${t('wf_tier_4', this.lang)}
-              </span>
-              <span class="text-xs text-slate-300 font-medium">${t('wf_tier_4_sub', this.lang)}</span>
-            </div>
-            <div class="text-[11px] font-mono text-emerald-400 font-bold">
-              Kasta Pelaksana • Tulang Punggung Harian Korporat
-            </div>
-          </div>
-
-          <!-- 4 Junior Staff Branches Grid -->
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-            ${s.workforce.juniors.map(jnr => {
-              const currentRate = jnr.salaryRates[jnr.salaryTier] || jnr.salaryRates.market;
-              const subtotalMonthly = jnr.count * currentRate;
-              return `
-                <div class="bg-[#0d2220] border border-emerald-500/20 rounded-lg p-3 flex flex-col justify-between gap-3 text-xs">
-                  <div>
-                    <!-- Header with Icon & Branch -->
-                    <div class="flex items-center justify-between mb-1.5">
-                      <span class="text-[10px] font-mono px-2 py-0.5 rounded-md ${jnr.badgeBg} font-bold">${jnr.branch}</span>
-                      ${getIcon(jnr.icon, `w-4 h-4 text-emerald-400`)}
-                    </div>
-
-                    <div class="font-bold text-white text-xs mb-1">${jnr.title}</div>
-                    <div class="text-[10px] text-slate-400 mb-2 leading-tight">${jnr.bonusDesc}</div>
-
-                    <!-- Config 1: Batch Quota Controls -->
-                    <div class="bg-slate-950/60 border border-slate-800/80 rounded-md p-2 mb-2">
-                      <div class="flex items-center justify-between text-[10px] text-slate-400 font-mono mb-1">
-                        <span>${t('wf_quota', this.lang)}:</span>
-                        <span class="text-white font-bold font-mono">${jnr.count} <span class="text-slate-400 font-normal">/ ${jnr.maxCount} Staf</span></span>
-                      </div>
-                      <div class="flex items-center gap-1">
-                        <button class="btn-adjust-quota flex-1 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-colors cursor-pointer disabled:opacity-40" data-tier="juniors" data-id="${jnr.id}" data-delta="-5" ${jnr.count < 5 ? 'disabled' : ''}>
-                          -5
-                        </button>
-                        <button class="btn-adjust-quota flex-1 py-1 rounded-md bg-emerald-600/80 hover:bg-emerald-600 text-white text-xs font-bold transition-colors cursor-pointer disabled:opacity-40" data-tier="juniors" data-id="${jnr.id}" data-delta="5" ${jnr.count + 5 > jnr.maxCount ? 'disabled' : ''}>
-                          +5
-                        </button>
-                        <button class="btn-adjust-quota flex-1 py-1 rounded-md bg-emerald-700/80 hover:bg-emerald-600 text-white text-xs font-bold transition-colors cursor-pointer disabled:opacity-40" data-tier="juniors" data-id="${jnr.id}" data-delta="20" ${jnr.count + 20 > jnr.maxCount ? 'disabled' : ''}>
-                          +20
-                        </button>
-                      </div>
-                    </div>
-
-                    <!-- Config 2: Salary Tier Selection -->
-                    <div class="bg-slate-950/60 border border-slate-800/80 rounded-md p-2 mb-2">
-                      <div class="flex items-center justify-between text-[10px] text-slate-400 font-mono mb-1">
-                        <span>${t('wf_salary_tier', this.lang)}:</span>
-                        <span class="text-emerald-400 font-bold">${formatCurrency(currentRate)}/bln</span>
-                      </div>
-                      <div class="grid grid-cols-3 gap-1">
-                        ${['budget', 'market', 'elite'].map(tierKey => `
-                          <button class="btn-set-salary py-1 px-1 rounded-md text-[10px] font-mono font-semibold transition-all cursor-pointer ${jnr.salaryTier === tierKey ? 'bg-emerald-600 text-white font-bold shadow-sm' : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-800'}" data-tier="juniors" data-id="${jnr.id}" data-tier-val="${tierKey}" title="${formatCurrency(jnr.salaryRates[tierKey])}/bln">
-                            ${tierKey === 'budget' ? t('wf_budget', this.lang) : (tierKey === 'market' ? t('wf_market', this.lang) : t('wf_elite', this.lang))}
-                          </button>
-                        `).join('')}
-                      </div>
-                    </div>
-
-                    <!-- Config 3: Open/Closed Recruitment Status Toggle -->
-                    <div class="flex items-center justify-between bg-slate-950/60 border border-slate-800/80 rounded-md p-2">
-                      <span class="text-[10px] text-slate-400 font-mono">${t('wf_recruitment', this.lang)}:</span>
-                      <button class="btn-toggle-recruiting inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-bold font-mono transition-all cursor-pointer ${jnr.isRecruiting ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30' : 'bg-slate-800 text-slate-400 border border-slate-700 hover:text-white'}" data-tier="juniors" data-id="${jnr.id}">
-                        ${jnr.isRecruiting ? getIcon('check', 'w-3 h-3 text-emerald-400') : getIcon('x', 'w-3 h-3 text-slate-400')}
-                        <span>${jnr.isRecruiting ? t('wf_open', this.lang) : t('wf_closed', this.lang)}</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  <!-- Subtotal summary -->
-                  <div class="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[10px] font-mono text-slate-400">
-                    <span>Beban Bulanan:</span>
-                    <span class="font-bold text-amber-400">${formatCurrency(subtotalMonthly)}/bln</span>
-                  </div>
-                </div>
-              `;
-            }).join('')}
-          </div>
-        </div>
-      </div>
-    `;
-
-    // Event Handlers
-    // 1. Hire C-Suite Candidate
-    mainEl.querySelectorAll('.btn-hire-cand').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const id = e.currentTarget.getAttribute('data-id');
-        const cand = s.candidatePool.find(c => c.id === id);
-        if (cand && !s.executives[cand.role]) {
-          s.executives[cand.role] = { ...cand };
-          soundEngine.playCashChime();
-          this.addChatMessage({
-            sender: 'Dewan Komisaris',
-            role: 'C-Suite Appointment',
-            icon: 'crown',
-            text: `${cand.name} resmi diangkat sebagai ${cand.role} (${EXECUTIVE_ROLES[cand.role].title})!`,
-            tag: 'general',
-          });
-          this.updateHeaderBar();
-          this.renderCSuiteTab(mainEl);
-        }
-      });
-    });
-
-    // 2. Fire C-Suite Executive
-    mainEl.querySelectorAll('.btn-fire-exec').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const role = e.currentTarget.getAttribute('data-role');
-        const exec = s.executives[role];
-        if (exec && !exec.isPlayer) {
-          s.executives[role] = null;
-          soundEngine.playKeyboardClick();
-          this.addChatMessage({
-            sender: 'Dewan Komisaris',
-            role: 'C-Suite Termination',
-            icon: 'briefcase',
-            text: `Kontrak kerja ${exec.name} sebagai ${role} telah dihentikan secara resmi.`,
-            tag: 'general',
-          });
-          this.updateHeaderBar();
-          this.renderCSuiteTab(mainEl);
-        }
-      });
-    });
-
-    // 3. Adjust Quota / Headcount
-    mainEl.querySelectorAll('.btn-adjust-quota').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const tier = e.currentTarget.getAttribute('data-tier');
-        const id = e.currentTarget.getAttribute('data-id');
-        const delta = parseInt(e.currentTarget.getAttribute('data-delta'), 10) || 0;
-        const list = s.workforce[tier];
-        if (list) {
-          const item = list.find(x => x.id === id);
-          if (item) {
-            const newCount = Math.max(0, Math.min(item.maxCount, (item.count || 0) + delta));
-            if (newCount !== item.count) {
-              item.count = newCount;
-              soundEngine.playKeyboardClick();
-              this.updateHeaderBar();
-              this.renderCSuiteTab(mainEl);
-            }
-          }
-        }
-      });
-    });
-
-    // 4. Set Salary Tier
-    mainEl.querySelectorAll('.btn-set-salary').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const tier = e.currentTarget.getAttribute('data-tier');
-        const id = e.currentTarget.getAttribute('data-id');
-        const tierVal = e.currentTarget.getAttribute('data-tier-val');
-        const list = s.workforce[tier];
-        if (list) {
-          const item = list.find(x => x.id === id);
-          if (item && item.salaryTier !== tierVal) {
-            item.salaryTier = tierVal;
-            soundEngine.playKeyboardClick();
-            this.updateHeaderBar();
-            this.renderCSuiteTab(mainEl);
-          }
-        }
-      });
-    });
-
-    // 5. Toggle Open/Closed Recruitment
-    mainEl.querySelectorAll('.btn-toggle-recruiting').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const tier = e.currentTarget.getAttribute('data-tier');
-        const id = e.currentTarget.getAttribute('data-id');
-        const list = s.workforce[tier];
-        if (list) {
-          const item = list.find(x => x.id === id);
-          if (item) {
-            item.isRecruiting = !item.isRecruiting;
-            soundEngine.playKeyboardClick();
-            this.updateHeaderBar();
-            this.renderCSuiteTab(mainEl);
-          }
-        }
-      });
-    });
+    renderWorkforceView(this, mainEl);
   }
 
   // TAB 5: R&D & TECH OPERATIONS

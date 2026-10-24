@@ -1,0 +1,330 @@
+/* ==========================================================================
+   NEO ARCADE & MY COMPANY SIMULATOR - MASTER STYLESHEET
+   Modern Executive Minimal Tech & Cyberpunk Corporate Tycoon
+   Optimized for: Desktop, Laptop & Smart TV (16:9 / 16:10 Widescreen)
+   ========================================================================== */
+@import "tailwindcss";
+
+:root {
+  /* Modern Executive & Japanese Color Palette */
+  --jp-void: #080A0F;
+  --jp-surface: #0E131F;
+  --jp-surface-card: #141A29;
+  --jp-surface-hover: #1A2236;
+  --jp-border-subtle: rgba(255, 255, 255, 0.08);
+  --jp-border-light: rgba(255, 255, 255, 0.16);
+  --jp-border-glow: rgba(255, 51, 102, 0.4);
+
+  --jp-sakura: #FF3366;
+  --jp-sakura-glow: rgba(255, 51, 102, 0.35);
+  --jp-cyan: #00E5FF;
+  --jp-cyan-glow: rgba(0, 229, 255, 0.35);
+  --jp-gold: #F59E0B;
+  --jp-gold-glow: rgba(245, 158, 11, 0.35);
+
+  --font-sans: 'Plus Jakarta Sans', 'Noto Sans JP', system-ui, -apple-system, sans-serif;
+  --font-jp: 'Noto Sans JP', 'Plus Jakarta Sans', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+html, body {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background-color: var(--jp-void);
+  color: #F1F5F9;
+  font-family: var(--font-sans);
+  overscroll-behavior: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#app {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--jp-void);
+}
+
+:root {
+  --theme-accent: #38bdf8;
+  --theme-accent-glow: rgba(56, 189, 248, 0.4);
+  --theme-border: rgba(56, 189, 248, 0.35);
+  --theme-header-bg: #0B101D;
+  --theme-card-bg: rgba(14, 19, 31, 0.85);
+  --theme-tab-active-bg: rgba(56, 189, 248, 0.18);
+  --theme-tab-active-border: #38bdf8;
+  --theme-tab-active-text: #38bdf8;
+}
+
+body[data-theme="cyan"] {
+  --theme-accent: #00E5FF;
+  --theme-accent-glow: rgba(0, 229, 255, 0.45);
+  --theme-border: rgba(0, 229, 255, 0.4);
+  --theme-header-bg: #040e1c;
+  --theme-card-bg: rgba(5, 18, 36, 0.88);
+  --theme-tab-active-bg: rgba(0, 229, 255, 0.2);
+  --theme-tab-active-border: #00E5FF;
+  --theme-tab-active-text: #00E5FF;
+}
+
+body[data-theme="emerald"] {
+  --theme-accent: #10B981;
+  --theme-accent-glow: rgba(16, 185, 129, 0.45);
+  --theme-border: rgba(16, 185, 129, 0.4);
+  --theme-header-bg: #03140d;
+  --theme-card-bg: rgba(4, 25, 17, 0.88);
+  --theme-tab-active-bg: rgba(16, 185, 129, 0.2);
+  --theme-tab-active-border: #10B981;
+  --theme-tab-active-text: #10B981;
+}
+
+body[data-theme="amber"] {
+  --theme-accent: #F59E0B;
+  --theme-accent-glow: rgba(245, 158, 11, 0.45);
+  --theme-border: rgba(245, 158, 11, 0.4);
+  --theme-header-bg: #140d02;
+  --theme-card-bg: rgba(26, 17, 4, 0.88);
+  --theme-tab-active-bg: rgba(245, 158, 11, 0.2);
+  --theme-tab-active-border: #F59E0B;
+  --theme-tab-active-text: #F59E0B;
+}
+
+body[data-theme="violet"] {
+  --theme-accent: #A855F7;
+  --theme-accent-glow: rgba(168, 85, 247, 0.45);
+  --theme-border: rgba(168, 85, 247, 0.4);
+  --theme-header-bg: #0e041a;
+  --theme-card-bg: rgba(22, 8, 38, 0.88);
+  --theme-tab-active-bg: rgba(168, 85, 247, 0.2);
+  --theme-tab-active-border: #A855F7;
+  --theme-tab-active-text: #A855F7;
+}
+
+body[data-theme="crimson"] {
+  --theme-accent: #F43F5E;
+  --theme-accent-glow: rgba(244, 63, 94, 0.45);
+  --theme-border: rgba(244, 63, 94, 0.4);
+  --theme-header-bg: #170308;
+  --theme-card-bg: rgba(33, 7, 15, 0.88);
+  --theme-tab-active-bg: rgba(244, 63, 94, 0.2);
+  --theme-tab-active-border: #F43F5E;
+  --theme-tab-active-text: #F43F5E;
+}
+
+/* Modern Atmosphere & Themes */
+.modern-jp-atmosphere {
+  background-color: #080A0F;
+  background-image: 
+    radial-gradient(circle at 20% 15%, rgba(56, 189, 248, 0.08) 0%, transparent 45%),
+    radial-gradient(circle at 80% 85%, rgba(0, 229, 255, 0.06) 0%, transparent 45%),
+    linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 48px 48px, 48px 48px;
+  transition: background-color 0.4s ease;
+}
+
+body[data-theme="cyan"] .modern-jp-atmosphere {
+  background-color: #030814;
+  background-image: 
+    radial-gradient(circle at 20% 15%, rgba(6, 182, 212, 0.18) 0%, transparent 50%),
+    radial-gradient(circle at 80% 85%, rgba(14, 165, 233, 0.14) 0%, transparent 50%),
+    linear-gradient(to right, rgba(6, 182, 212, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(6, 182, 212, 0.05) 1px, transparent 1px);
+}
+
+body[data-theme="emerald"] .modern-jp-atmosphere {
+  background-color: #030F0A;
+  background-image: 
+    radial-gradient(circle at 20% 15%, rgba(16, 185, 129, 0.18) 0%, transparent 50%),
+    radial-gradient(circle at 80% 85%, rgba(5, 150, 105, 0.14) 0%, transparent 50%),
+    linear-gradient(to right, rgba(16, 185, 129, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(16, 185, 129, 0.05) 1px, transparent 1px);
+}
+
+body[data-theme="amber"] .modern-jp-atmosphere {
+  background-color: #0F0A02;
+  background-image: 
+    radial-gradient(circle at 20% 15%, rgba(245, 158, 11, 0.18) 0%, transparent 50%),
+    radial-gradient(circle at 80% 85%, rgba(217, 119, 6, 0.14) 0%, transparent 50%),
+    linear-gradient(to right, rgba(245, 158, 11, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(245, 158, 11, 0.05) 1px, transparent 1px);
+}
+
+body[data-theme="violet"] .modern-jp-atmosphere {
+  background-color: #0B0414;
+  background-image: 
+    radial-gradient(circle at 20% 15%, rgba(168, 85, 247, 0.18) 0%, transparent 50%),
+    radial-gradient(circle at 80% 85%, rgba(192, 38, 211, 0.14) 0%, transparent 50%),
+    linear-gradient(to right, rgba(168, 85, 247, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(168, 85, 247, 0.05) 1px, transparent 1px);
+}
+
+body[data-theme="crimson"] .modern-jp-atmosphere {
+  background-color: #120307;
+  background-image: 
+    radial-gradient(circle at 20% 15%, rgba(244, 63, 94, 0.18) 0%, transparent 50%),
+    radial-gradient(circle at 80% 85%, rgba(225, 29, 72, 0.14) 0%, transparent 50%),
+    linear-gradient(to right, rgba(244, 63, 94, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(244, 63, 94, 0.05) 1px, transparent 1px);
+}
+
+/* Dynamic Themed Components */
+header#tycoon-header {
+  background-color: var(--theme-header-bg) !important;
+  border-color: var(--theme-border) !important;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+footer {
+  background-color: var(--theme-header-bg) !important;
+  border-color: var(--theme-border) !important;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Active Tab Indicator */
+.tab-btn[data-active="true"] {
+  background: var(--theme-tab-active-bg) !important;
+  border-color: var(--theme-tab-active-border) !important;
+  color: #FFFFFF !important;
+  box-shadow: 0 0 16px var(--theme-accent-glow) !important;
+}
+
+.tab-btn:hover:not([data-active="true"]) {
+  border-color: var(--theme-border) !important;
+}
+
+/* Dynamic theme badge colors */
+.theme-badge {
+  background-color: var(--theme-tab-active-bg) !important;
+  border-color: var(--theme-border) !important;
+  color: var(--theme-accent) !important;
+}
+
+/* Dynamic theme card styling - subtle ambient accenting without flattening individual card colors */
+.theme-card {
+  border-color: var(--theme-border);
+  transition: border-color 0.3s ease;
+}
+
+/* Selected item border & text in theme accent */
+.stock-tab-btn[class*="border-amber-500"],
+.stock-tab-btn[class*="ring-amber-500"] {
+  border-color: var(--theme-accent) !important;
+  box-shadow: 0 0 12px var(--theme-accent-glow) !important;
+}
+
+.stock-tab-btn span[class*="text-amber-400"] {
+  color: var(--theme-accent) !important;
+}
+
+/* Speed button active state */
+.btn-speed.bg-amber-500 {
+  background-color: var(--theme-accent) !important;
+  color: #040810 !important;
+}
+
+/* Inputs border on focus */
+input:focus, select:focus, textarea:focus {
+  border-color: var(--theme-accent) !important;
+  box-shadow: 0 0 8px var(--theme-accent-glow) !important;
+}
+
+/* Modern Card */
+.jp-card-modern {
+  background: rgba(14, 19, 31, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--jp-border-subtle);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.jp-card-modern:hover {
+  border-color: var(--jp-border-light);
+  background: rgba(20, 26, 41, 0.85);
+}
+
+/* Hero Play Button */
+.jp-play-btn {
+  background: linear-gradient(135deg, #FF3366 0%, #E11D48 100%);
+  color: #FFFFFF;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 4px 20px var(--jp-sakura-glow);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+}
+
+.jp-play-btn:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 8px 28px rgba(255, 51, 102, 0.55);
+  background: linear-gradient(135deg, #FF4D7D 0%, #F43F5E 100%);
+}
+
+.jp-play-btn:active {
+  transform: translateY(1px) scale(0.98);
+}
+
+/* Secondary Button */
+.jp-secondary-btn {
+  background: rgba(255, 255, 255, 0.05);
+  color: #E2E8F0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(8px);
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.jp-secondary-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: #FFFFFF;
+}
+
+/* Accent Line */
+.jp-katana-line {
+  height: 2px;
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    rgba(255, 51, 102, 0.6) 25%, 
+    rgba(0, 229, 255, 0.7) 50%, 
+    rgba(245, 158, 11, 0.6) 75%, 
+    transparent 100%
+  );
+}
+
+/* Visible Focus Ring */
+:focus-visible {
+  outline: 2px solid #00E5FF !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.6) !important;
+}
+
+/* Elegant Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(10, 14, 22, 0.6);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}

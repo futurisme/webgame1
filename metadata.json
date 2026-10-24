@@ -1,0 +1,6 @@
+{
+  "name": "My Company Simulator - Business Tycoon, Stocks & Conglomerate Engine",
+  "description": "Simulasi perusahaan dan konglomerasi bisnis 2D interaktif dengan pasar saham, kepemilikan ekuitas, posisi C-Suite (CEO, CTO, CFO), negosiasi investor, dan kompetitor AI NPC otonom.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -12,6 +12,7 @@ export const TRANSLATIONS = {
     tab_companies: 'Perusahaan Global',
     tab_equity: 'Ekuitas & Investor',
     tab_csuite: 'Pegawai',
+    tab_products: 'Produk Device',
     tab_rnd: 'R&D & Paten',
 
     // Workforce & Pegawai Tab
@@ -171,6 +172,7 @@ export const TRANSLATIONS = {
     tab_companies: 'Global Enterprises',
     tab_equity: 'Equity & Investors',
     tab_csuite: 'Workforce',
+    tab_products: 'Products',
     tab_rnd: 'R&D & Patents',
 
     // Workforce Tab
@@ -330,6 +332,7 @@ export function t(key, lang = 'id') {
 }
 
 export const SECTOR_OPTIONS = [
+  { id: 'Consumer Devices & Perangkat Keras', labelId: 'Consumer Devices (HP, Laptop, Tablet)', labelEn: 'Consumer Devices & Hardware OEM', badge: 'bg-amber-950/80 border-amber-700/80 text-amber-300' },
   { id: 'Kecerdasan Buatan & Komputasi Neural', labelId: 'AI & Komputasi Neural', labelEn: 'AI & Neural Computing', badge: 'bg-indigo-950/80 border-indigo-700/80 text-indigo-300' },
   { id: 'Cloud Skala-Hiper & Keamanan Siber', labelId: 'Cloud Skala-Hiper & Siber', labelEn: 'Hyper-scale Cloud & Cyber', badge: 'bg-cyan-950/80 border-cyan-700/80 text-cyan-300' },
   { id: 'Fabrikasi Semikonduktor & Fotonik', labelId: 'Fabrikasi Semikonduktor & Chip', labelEn: 'Semiconductors & Photonics', badge: 'bg-sky-950/80 border-sky-700/80 text-sky-300' },

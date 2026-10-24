@@ -32,6 +32,8 @@ import { generateProceduralCompetitors } from './companyGenerator.js';
 import { StockCanvasChart } from './stockCanvas.js';
 import { renderWorkforceView } from './workforceView.js';
 import { renderStockMarketView, updateStockMarketViewTicks } from './stockMarketView.js';
+import { renderProductsView } from './productsView.js';
+import { initializeHardwareMarket, advanceHardwareMarketSimulation, estimateDeviceMarketDemand } from './hardwareMarket.js';
 import {
   EXECUTIVE_ROLES,
   calculateCSuiteBonuses,
@@ -131,7 +133,7 @@ export class TycoonApp {
     const saved = this.loadSavedProfile();
     const companyName = saved?.companyName || 'NEXUS DYNAMICS CORP';
     const ticker = (saved?.ticker || 'NXUS').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4) || 'NXUS';
-    const sector = saved?.sector || 'Kecerdasan Buatan & Komputasi Neural';
+    const sector = saved?.sector || 'Consumer Devices & Perangkat Keras';
 
     // Guaranteed 100% Founder Equity at initial start before accepting external investors
     const initialEquity = {
@@ -210,6 +212,8 @@ export class TycoonApp {
       activeTermSheets: [],
       workers: JSON.parse(JSON.stringify(INITIAL_OFFICE_WORKERS)),
       workforce: JSON.parse(JSON.stringify(DEFAULT_WORKFORCE)),
+      products: [],
+      hardwareMarket: initializeHardwareMarket(populatedCompetitors),
       chatMessages: [
         {
           id: 'msg_0',
@@ -293,7 +297,55 @@ export class TycoonApp {
     // Apply bonuses to baseline revenue and expenses
     const totalRevenueMultiplier = execBonuses.revenueMultiplier + wfStats.totalRevenueMultiplierBonus;
     const totalExpenseReductionPct = Math.min(60, execBonuses.expenseReductionPct + wfStats.totalExpenseReductionPct);
-    const effectiveRevenue = (s.monthlyRevenue * totalRevenueMultiplier) + allianceRevenueBonus;
+
+    // AI-NPC Semiconductor Evolution & Market Upgrades
+    const hardwareNews = advanceHardwareMarketSimulation(s);
+    if (hardwareNews) {
+      soundEngine.playAlertTone();
+      this.addChatMessage({
+        sender: `B2B Foundry: ${hardwareNews.symbol}`,
+        role: 'Semiconductor Wire',
+        icon: 'cpu',
+        text: hardwareNews.message,
+        tag: 'market',
+      });
+    }
+
+    // Hardware Device Sales Simulation for Player's Consumer Products
+    let monthlyHardwareRevenue = 0;
+    if (s.products && s.products.length > 0) {
+      for (const prod of s.products) {
+        if (prod.isDiscontinued) {
+          prod.monthlySalesUnits = 0;
+          continue;
+        }
+
+        const demand = estimateDeviceMarketDemand({
+          deviceType: prod.deviceType,
+          bom: prod.bom,
+          msrp: prod.msrp,
+          qualityScore: prod.hardware?.cpu?.benchmarkScore ? Math.round(prod.hardware.cpu.benchmarkScore / 30) : 80,
+          companyReputation: s.reputation,
+          techLevel: s.techLevel,
+          marketingEfficiency: totalRevenueMultiplier,
+        });
+
+        const targetMonthly = demand.projectedMonthlySales;
+        prod.monthlySalesUnits = targetMonthly;
+
+        const maxAvailable = prod.inventory || 0;
+        const tickUnits = Math.min(maxAvailable, Math.max(0, Math.round(targetMonthly * (speed / 30))));
+        if (tickUnits > 0) {
+          prod.inventory -= tickUnits;
+          prod.totalUnitsSold = (prod.totalUnitsSold || 0) + tickUnits;
+          const tickRevenue = tickUnits * prod.msrp;
+          s.cash += tickRevenue;
+        }
+        monthlyHardwareRevenue += targetMonthly * prod.msrp;
+      }
+    }
+
+    const effectiveRevenue = (s.monthlyRevenue * totalRevenueMultiplier) + allianceRevenueBonus + monthlyHardwareRevenue;
     const effectiveExpenses = (s.monthlyExpenses * (1 - totalExpenseReductionPct / 100)) + totalPayroll;
 
     // Cash flow delta for this tick (proportional to speed)
@@ -585,6 +637,11 @@ export class TycoonApp {
                 <span>${t('tab_csuite', this.lang)}</span>
                 <span class="header-badge-csuite px-1.5 py-0.2 text-[10px] rounded bg-purple-500/20 text-purple-300 font-mono font-bold">${wfStats.totalHeadcount}</span>
               </button>
+              <button class="tab-btn h-8 inline-flex items-center gap-1.5 px-3 text-xs font-semibold rounded-lg transition-all whitespace-nowrap cursor-pointer active:scale-[0.98] ${this.activeTab === 'products' ? 'active-tab' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent'}" data-tab="products" data-active="${this.activeTab === 'products'}">
+                ${getIcon('smartphone', 'w-3.5 h-3.5 text-amber-400')}
+                <span>${t('tab_products', this.lang)}</span>
+                <span class="header-badge-products px-1.5 py-0.2 text-[10px] rounded bg-amber-500/20 text-amber-300 font-mono font-bold ${(s.products && s.products.length > 0) ? '' : 'hidden'}">${(s.products || []).length}</span>
+              </button>
               <button class="tab-btn h-8 inline-flex items-center gap-1.5 px-3 text-xs font-semibold rounded-lg transition-all whitespace-nowrap cursor-pointer active:scale-[0.98] ${this.activeTab === 'rnd' ? 'active-tab' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent'}" data-tab="rnd" data-active="${this.activeTab === 'rnd'}">
                 ${getIcon('cpu', 'w-3.5 h-3.5 text-cyan-400')}
                 <span>${t('tab_rnd', this.lang)}</span>
@@ -757,6 +814,11 @@ export class TycoonApp {
                 <span>${t('tab_csuite', this.lang)}</span>
                 <span class="header-badge-csuite px-1.5 py-0.2 text-[10px] rounded bg-purple-500/20 text-purple-300 font-mono font-bold">${wfStats.totalHeadcount}</span>
               </button>
+              <button class="tab-btn h-8 inline-flex items-center gap-1.5 px-3.5 text-xs font-semibold rounded-lg transition-all whitespace-nowrap cursor-pointer active:scale-[0.98] ${this.activeTab === 'products' ? 'active-tab' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent'}" data-tab="products" data-active="${this.activeTab === 'products'}">
+                ${getIcon('smartphone', 'w-3.5 h-3.5 text-amber-400')}
+                <span>${t('tab_products', this.lang)}</span>
+                <span class="header-badge-products px-1.5 py-0.2 text-[10px] rounded bg-amber-500/20 text-amber-300 font-mono font-bold ${(s.products && s.products.length > 0) ? '' : 'hidden'}">${(s.products || []).length}</span>
+              </button>
               <button class="tab-btn h-8 inline-flex items-center gap-1.5 px-3.5 text-xs font-semibold rounded-lg transition-all whitespace-nowrap cursor-pointer active:scale-[0.98] ${this.activeTab === 'rnd' ? 'active-tab' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent'}" data-tab="rnd" data-active="${this.activeTab === 'rnd'}">
                 ${getIcon('cpu', 'w-3.5 h-3.5 text-cyan-400')}
                 <span>${t('tab_rnd', this.lang)}</span>
@@ -923,6 +985,16 @@ export class TycoonApp {
     headerEl.querySelectorAll('.header-badge-equity').forEach(el => {
       el.textContent = s.activeTermSheets.length;
       if (s.activeTermSheets.length > 0) {
+        el.classList.remove('hidden');
+      } else {
+        el.classList.add('hidden');
+      }
+    });
+
+    headerEl.querySelectorAll('.header-badge-products').forEach(el => {
+      const pCount = (s.products || []).length;
+      el.textContent = pCount;
+      if (pCount > 0) {
         el.classList.remove('hidden');
       } else {
         el.classList.add('hidden');
@@ -1346,7 +1418,7 @@ export class TycoonApp {
     const s = this.state;
     let tempName = s.companyName || 'NEXUS DYNAMICS CORP';
     let tempTicker = (s.ticker || 'NXUS').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4) || 'NXUS';
-    let tempSector = s.sector || 'Kecerdasan Buatan & Komputasi Neural';
+    let tempSector = s.sector || 'Consumer Devices & Perangkat Keras';
 
     const sectorOptions = SECTOR_OPTIONS;
     const isEn = this.lang === 'en';
@@ -1520,7 +1592,7 @@ export class TycoonApp {
         const finalName = nameInput?.value.trim() || 'NEXUS DYNAMICS CORP';
         let finalTicker = tickerInput?.value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4) || 'NXUS';
         if (finalTicker.length < 2) finalTicker = 'NXUS';
-        const finalSector = sectorSelect?.value || 'Kecerdasan Buatan & Komputasi Neural';
+        const finalSector = sectorSelect?.value || 'Consumer Devices & Perangkat Keras';
 
         this.state.companyName = finalName;
         this.state.ticker = finalTicker;
@@ -1586,6 +1658,8 @@ export class TycoonApp {
       this.renderEquityTab(mainEl);
     } else if (this.activeTab === 'csuite') {
       this.renderCSuiteTab(mainEl);
+    } else if (this.activeTab === 'products') {
+      renderProductsView(this, mainEl);
     } else if (this.activeTab === 'rnd') {
       this.renderRndTab(mainEl);
     }
